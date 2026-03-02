@@ -40,7 +40,7 @@ def reference_sampling_mixture(kto_policies: list, ref_policy, title_suffix=""):
     plt.title(f"Mixture Policy: KL Estimation Mode Comparison {title_suffix}")
     plt.legend()
     plt.grid(True, alpha=0.3)
-    plt.savefig(f"images/reference_sampling_mixture{title_suffix}.png".replace(" ", "_"))
+    # plt.savefig(f"images/reference_sampling_mixture{title_suffix}.png".replace(" ", "_"))
     plt.show()
  
 
@@ -79,24 +79,9 @@ if __name__ == "__main__":
     
     
     # Plot densities
-    reference_sampling_mixture(kto_policies, ref_mixture, title_suffix="_in_modes")
+    reference_sampling_mixture(kto_policies, ref_mixture, title_suffix="_1")
     
-    # Also plot the entropy dynamics
-    plt.figure(figsize=(10, 6))
-    plt.plot(sigmas_batch, 'r-', label="batch", alpha=0.7)
-    plt.plot(sigmas_running, 'g-', label="running_avg", alpha=0.7)
-    plt.plot(sigmas_fixed, 'orange', label="fixed", alpha=0.7)
-    plt.xlabel("Training Step")
-    plt.ylabel("Average Sigma")
-    plt.title("KL Estimation Mode: Entropy Dynamics")
-    plt.legend()
-    plt.grid(True, alpha=0.3)
-    plt.savefig("images/reference_sampling_mixture_dynamics.png")
-    plt.show()
-    
-    # Additional experiment: One mode inside, one outside
     print("\n" + "="*50)
-    print("Experiment 2")
     
     ref_mixed = GaussianMixturePolicy(
         n_components=2,
@@ -135,5 +120,16 @@ if __name__ == "__main__":
     
     
     # Plot densities
-    reference_sampling_mixture(kto_policies, ref_mixed, title_suffix="_outside_modes")
+    reference_sampling_mixture(kto_policies, ref_mixed, title_suffix="")
     
+    plt.figure(figsize=(10, 6))
+    plt.plot(sigmas_batch, 'r-', label="batch", alpha=0.7)
+    plt.plot(sigmas_running, 'g-', label="running_avg", alpha=0.7)
+    plt.plot(sigmas_fixed, 'orange', label="fixed", alpha=0.7)
+    plt.xlabel("Training Step")
+    plt.ylabel("Average Sigma")
+    plt.title("KL Estimation Mode: Entropy Dynamics")
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.savefig("images/reference_sampling_mixture_dynamics.png")
+    plt.show()

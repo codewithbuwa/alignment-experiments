@@ -29,10 +29,20 @@ def reference_sampling(kto_policies: list[GaussianPolicy]):
     plt.savefig("images/reference_sampling.png")
     plt.show()
 
-kto_anal = kt.train_kto(beta=1.0, estimation_mode="analytical")[0]
-kto_batch = kt.train_kto(beta=1.0, estimation_mode="batch")[0]
-kto_running_avg = kt.train_kto(beta=1.0, estimation_mode="running_avg")[0]
-kto_fixed = kt.train_kto(beta=1.0, estimation_mode="fixed")[0]
+kto_anal, sigma_anal = kt.train_kto(beta=1.0, estimation_mode="analytical")
+kto_batch, sigma_batch = kt.train_kto(beta=1.0, estimation_mode="batch")
+kto_running_avg, sigma_rnavg = kt.train_kto(beta=1.0, estimation_mode="running_avg")
+kto_fixed, sigma_fixed = kt.train_kto(beta=1.0, estimation_mode="fixed")
 
 kto_policies = [kto_anal, kto_batch, kto_running_avg, kto_fixed]
 reference_sampling(kto_policies)
+
+plt.figure()
+plt.plot(sigma_anal, label="analytical")
+plt.plot(sigma_batch, label=f"batch")
+plt.plot(sigma_rnavg, label="running avg")
+plt.plot(sigma_fixed, label=f"fixed")
+plt.legend()
+plt.title("Density Projection")
+plt.savefig("images/reference_sampling_entropy_dynamics.png")
+plt.show()

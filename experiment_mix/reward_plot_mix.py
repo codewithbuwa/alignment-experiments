@@ -9,6 +9,7 @@ def plot_implicit_reward(policy, ref_policy, beta, title):
     plt.title(title)
     plt.xlabel("y")
     plt.ylabel("r(y)")
+    plt.grid(True, alpha=0.3)
     plt.savefig(f"images/{title}.png")
     plt.show()
 

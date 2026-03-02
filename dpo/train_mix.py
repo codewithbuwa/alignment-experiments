@@ -1,10 +1,10 @@
-from dataset.dataset import *
+from dataset.dataset_mix import *
 from policy.gaussian_mixture import *
 from policy.gaussian import *
 from utils import *
 import experiments_single.imp_reward as ir
 
-y_w, y_l = build_dpo_dataset()
+y_w, y_l = build_mixture_dpo_dataset()
 
 def train_dpo_mixture(ref_policy: GaussianMixturePolicy = REF_POLICY, 
                       beta = BETA, n_components=2, steps=STEPS, lr=LR):

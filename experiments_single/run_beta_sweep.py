@@ -23,5 +23,5 @@ def run_beta_sweep(beta_values):
 
     return dpo_sigmas, kto_sigmas
 
-beta_values = [0.1, 0.5, 1.0, 2.0, 5.0]
+beta_values = [0.1, 0.5, 1.0, 2.0, 5.0, 10.0]
 run_beta_sweep(beta_values)

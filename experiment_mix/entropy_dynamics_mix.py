@@ -11,5 +11,6 @@ if __name__ == "__main__":
     plt.ylabel("Average Sigma")
     plt.legend()
     plt.title("Mixture Entropy Dynamics")
+    plt.grid(True, alpha=0.3)
     plt.savefig("images/mixture_entropy_dynamics.png")
     plt.show()

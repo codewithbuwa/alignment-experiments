@@ -1,10 +1,6 @@
-from utils import *
+from tkinter import N
 
-import torch
-import torch.nn as nn
-import math
 from utils import *
-
 class GaussianMixturePolicy(nn.Module):
     def __init__(self, n_components=2, mu_init=None, log_sigma_init=None, logits_init=None):
         super().__init__()
@@ -65,8 +61,10 @@ class GaussianMixturePolicy(nn.Module):
             kl = torch.mean(log_p - log_ref).detach()
             
             return kl
-REF_POLICY = GaussianMixturePolicy(
-    mu_init = torch.linspace(4, 7, N_COMPONENTS),
+        
+
+REF_POLICY = GaussianMixturePolicy(n_components= N_COMPONENTS,
+    mu_init = torch.linspace(3, 8, N_COMPONENTS),
     log_sigma_init = math.log(REF_SIGMA) * torch.ones(N_COMPONENTS), 
     logits_init = torch.zeros(N_COMPONENTS)
 ).to(DEVICE)

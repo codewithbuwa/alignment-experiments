@@ -1,3 +1,3 @@
 from policy.gaussian_mixture import *
-import policy.gaussian as gaus
+from policy.gaussian import *
 from utils import *

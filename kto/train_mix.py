@@ -1,13 +1,13 @@
 from __init__ import *
 import experiments_single.imp_reward as ir
-import dataset.dataset as data
+import dataset.dataset_mix as data
 
 def train_kto_mixture(ref_policy: GaussianMixturePolicy = REF_POLICY, beta = BETA, delta=1.5, good_ratio=None,
-                      estimation_mode="analytical", n_components=2, alpha = 0.1):
+                      estimation_mode="batch", n_components=2, alpha = 0.3):
     policy = GaussianMixturePolicy(n_components=n_components).to(DEVICE)
     optimizer = optim.Adam(policy.parameters(), lr=LR)
     
-    y_fixed, labels_fixed = data.build_kto_dataset(delta)
+    y_fixed, labels_fixed = data.build_mixture_kto_dataset(delta = delta)
     sigmas = []
     running_kl = torch.tensor(0.0).to(DEVICE)
     
@@ -28,10 +28,10 @@ def train_kto_mixture(ref_policy: GaussianMixturePolicy = REF_POLICY, beta = BET
                 log_p_sample = policy.log_prob(y_sample)
                 log_ref_sample = ref_policy.log_prob(y_sample)
                 batch_kl = torch.mean(log_p_sample - log_ref_sample).detach()
-                running_kl = alpha * running_kl + alpha * batch_kl
+                running_kl = (1 - alpha) * running_kl + alpha * batch_kl                
                 kl = running_kl
         elif estimation_mode == "fixed":
-            kl = 0.1
+            kl = 0.2
         else:
             raise ValueError("Unknown estimation_mode")
         

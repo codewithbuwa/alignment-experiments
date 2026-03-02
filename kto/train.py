@@ -3,8 +3,8 @@ import experiments_single.imp_reward as ir
 import dataset.dataset as data
 
 def train_kto(beta, delta=1.5, good_ratio=None, estimation_mode="analytical", alpha=0.5):
-    policy = gaus.GaussianPolicy().to(DEVICE)
-    ref_policy = gaus.GaussianPolicy(REF_MU, math.log(REF_SIGMA)).to(DEVICE)
+    policy = GaussianPolicy().to(DEVICE)
+    ref_policy = GaussianPolicy(REF_MU, math.log(REF_SIGMA)).to(DEVICE)
     optimizer = optim.Adam(policy.parameters(), lr=LR)
 
     torch.manual_seed(42)
@@ -38,7 +38,7 @@ def train_kto(beta, delta=1.5, good_ratio=None, estimation_mode="analytical", al
                 running_kl = (1 - alpha) * running_kl + alpha * batch_kl
                 kl = running_kl
         elif estimation_mode == "fixed":
-            kl = 0.1   # constant
+            kl = 0.3   # constant
 
         z = h - kl
 

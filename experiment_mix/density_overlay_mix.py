@@ -15,6 +15,7 @@ def plot_mixture_densities(ref_policy, dpo_policy, kto_policy):
     plt.title("Mixture Densities after Training")
     plt.xlabel("y")
     plt.ylabel("Density")
+    plt.grid(True, alpha=0.3)
     plt.savefig("images/mixture_density_overlay.png")
     plt.show()
 
