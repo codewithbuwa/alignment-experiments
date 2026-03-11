@@ -14,7 +14,7 @@ torch.manual_seed(42)
 BETA = 1.0
 LR = 1e-3
 STEPS = 2000
-DATASET_SIZE = 1000
+DATASET_SIZE = 10000
 LAMBDA = 1.33
 DEVICE = "cpu"
 

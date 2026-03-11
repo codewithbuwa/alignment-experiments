@@ -64,7 +64,7 @@ class GaussianMixturePolicy(nn.Module):
         
 
 REF_POLICY = GaussianMixturePolicy(n_components= N_COMPONENTS,
-    mu_init = torch.linspace(3, 8, N_COMPONENTS),
+    mu_init = torch.linspace(5, 8, N_COMPONENTS),
     log_sigma_init = math.log(REF_SIGMA) * torch.ones(N_COMPONENTS), 
     logits_init = torch.zeros(N_COMPONENTS)
 ).to(DEVICE)

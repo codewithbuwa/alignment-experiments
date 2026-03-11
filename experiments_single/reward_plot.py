@@ -1,20 +1,29 @@
+from pyparsing import alphas
+
 from __init__ import *
 import experiments_single.imp_reward as ir
 
-REF_POLICY = GaussianPolicy(REF_MU, math.log(REF_SIGMA)).to(DEVICE)
-def plot_implicit_reward(policy, beta, title="Implicit Reward"):
+def plot_implicit_reward(policy, ref_policy, beta = BETA, title="Reward plot", mode = ""):
     y_vals = torch.linspace(-2, 14, 10000)
-    r_vals = ir.implicit_reward(policy, REF_POLICY, y_vals, beta).detach()
-
+    r_vals = [ir.implicit_reward(pol, ref_policy, y_vals, beta).detach() for pol in policy]
+    oracle_reward = lambda y: -abs(y-TARGET)
+    r_vals.append(oracle_reward(y_vals))
+    labels = ["DPO reward", "KTO reward", "Oracle reward"]
     plt.figure()
-    plt.plot(y_vals, r_vals)
+    for i, rval in enumerate(r_vals):
+        plt.plot(y_vals, rval, label = f"{labels[i]}: max = {max(rval):.2f}")
     plt.title(title)
+    plt.legend()
+    plt.grid(True, alpha=0.3)
     plt.xlabel("y")
-    plt.ylabel("r(y)")
-    plt.savefig(f"images/{title}.png")
+    plt.ylabel("Reward (r(y))")
+    plt.savefig(f"images/{labels[0][-6:]}_{mode}.png")
     plt.show()
 
-dpo_policy = dp.train_dpo(beta=1.0)[0]
-kto_policy = kt.train_kto(beta=1.0)[0]
-plot_implicit_reward(dpo_policy, beta=1.0, title="DPO Implicit Reward")
-plot_implicit_reward(kto_policy, beta=1.0, title="KTO Implicit Reward")
+if __name__ == "__main__":
+    REF_POLICY = GaussianPolicy(REF_MU, math.log(REF_SIGMA)).to(DEVICE)
+
+    dpo_policy = dp.train_dpo(beta=1.0)[0]
+    kto_policy = kt.train_kto(beta=1.0)[0]
+
+    plot_implicit_reward([dpo_policy, kto_policy], REF_POLICY, beta=1.0, mode = "single")

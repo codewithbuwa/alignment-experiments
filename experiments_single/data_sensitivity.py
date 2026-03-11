@@ -13,15 +13,13 @@ def run_sensitivity_grid(alphas, delta=1.0):
         # KTO
         kto_policy, _ = kt.train_kto(BETA, delta, good_ratio=alpha)
         kto_sigmas.append(kto_policy.sigma().item())
-
-        print(f"alpha={alpha:.2f} | DPO sigma={dpo_sigmas[-1]:.3f} | KTO sigma={kto_sigmas[-1]:.3f}")
-
+        
     plt.figure()
     plt.plot(alphas, dpo_sigmas, marker='o', label="DPO")
     plt.plot(alphas, kto_sigmas, marker='o', label="KTO")
-    plt.xlabel("Supervision Strength (alpha)")
+    plt.xlabel("Good ratio (alpha)")
     plt.ylabel("Final Sigma")
-    plt.title("DPO vs KTO Sensitivity Grid")
+    plt.title("DPO vs KTO Data Robustness")
     plt.legend()
     plt.savefig("images/data_sensitivity.png")
     plt.show()

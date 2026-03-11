@@ -1,0 +1,42 @@
+{
+  "seed": 123,
+  "n_components": 3,
+  "dataset_size": 4000,
+  "val_fraction": 0.2,
+  "steps": 1500,
+  "batch_size": 256,
+  "lr": 0.003,
+  "target_weights": [
+    0.5,
+    0.3,
+    0.2
+  ],
+  "target_means": [
+    3.0,
+    7.0,
+    10.0
+  ],
+  "target_sigmas": [
+    1.0,
+    0.8,
+    1.2
+  ],
+  "init_means": [
+    2.0,
+    6.0,
+    9.0
+  ],
+  "init_sigmas": [
+    1.5,
+    1.5,
+    1.5
+  ],
+  "init_logits": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "y_min": -5.0,
+  "y_max": 15.0,
+  "device": "cpu"
+}

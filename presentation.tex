@@ -1,0 +1,425 @@
+\documentclass{beamer}
+\usetheme{Madrid}
+% Alternative themes (uncomment one to switch):
+% \usetheme{metropolis}    % Modern, minimalist, flat design
+% \usetheme{Warsaw}        % Classic, glossy, split header
+% \usetheme{Frankfurt}     % Structured with navigation circles
+% \usetheme{CambridgeUS}   % Clean, info-heavy footer (red by default)
+% \usetheme{Boadilla}      % Minimalist version of Madrid
+
+% Kera color scheme - Deep red/Blue (Based on existing definition, but name was 'kerablue')
+% Renaming colors to match 'Kera' branding
+\definecolor{kerablue}{RGB}{43,61,159}
+\definecolor{keradarkblue}{RGB}{30,45,120}
+
+% Set beamer colors to match Kera branding
+\setbeamercolor{structure}{fg=kerablue}
+\setbeamercolor{palette primary}{bg=kerablue,fg=white}
+\setbeamercolor{palette secondary}{bg=keradarkblue,fg=white}
+\setbeamercolor{palette tertiary}{bg=kerablue,fg=white}
+\setbeamercolor{palette quaternary}{bg=keradarkblue,fg=white}
+\setbeamercolor{titlelike}{bg=kerablue,fg=white}
+\setbeamercolor{frametitle}{bg=kerablue,fg=white}
+\setbeamercolor{block title}{bg=kerablue,fg=white}
+
+% Apply Dark Mode adjustments if enabled
+\newif\ifdarkmode
+\darkmodefalse % Set to \darkmodefalse to disable dark mode
+\ifdarkmode
+    \definecolor{kerabg}{RGB}{30,30,30} % Dark background color
+    \setbeamercolor{background canvas}{bg=kerabg}
+    \setbeamercolor{normal text}{fg=white}
+    
+    % Adjust structure (titles, bullets) to be lighter for contrast
+    \setbeamercolor{structure}{fg=kerablue!60!white} 
+    \setbeamercolor{frametitle}{bg=kerabg,fg=kerablue!60!white}
+    \setbeamercolor{titlelike}{bg=kerabg,fg=kerablue!60!white}
+\fi
+
+
+% Packages
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{hyperref}
+\usepackage{booktabs} % For better looking tables
+\usepackage{svg}      % To support SVG images directly (requires Inkscape usually)
+\usepackage{booktabs}
+\usepackage{pifont}
+\newcommand{\xmark}{\text{\ding{55}}}
+
+
+% Title information
+\title[DPO \& KTO Implementation]{DPO and KTO Implementation using Gaussians Policies}
+\subtitle{ML Reasearch Presentation}
+
+% Author information
+\author[Jordan Buwa]{Jordan Kevin Buwa Mbouobda}
+%\\ \small joint work: Colleague. X}
+
+% Team Name information
+\institute{MI Research}
+\date{\today}
+
+% Logo configuration
+% Using Main.svg for the title page and Icon.svg for other slides
+% Note: Compiling with SVG requires the 'svg' package and typically 'inkscape' installed and in PATH, with -shell-escape enabled.
+% If SVG compilation fails, convert SVGs to PNGs and use \includegraphics.
+
+% Small logo on every slide (bottom right usually)
+\logo{\includesvg[height=0.5cm]{Icon}}
+
+% Large logo on title page
+\titlegraphic{\includesvg[height=1.5cm]{Main}}
+
+\begin{document}
+
+% ============================================
+% Slide 1: Title Slide
+% ============================================
+{
+\setbeamertemplate{logo}{}
+\begin{frame}
+    \titlepage
+\end{frame}
+}
+
+% ============================================
+% Slide 2: Outline (Optional)
+% ============================================
+\begin{frame}{Outline}
+    \tableofcontents
+\end{frame}
+
+% ============================================
+% SECTION 1: Problem & Motivation
+% ============================================
+\section{Introduction}
+
+% Slide 3: Problem & Motivation
+\begin{frame}{Introduction}
+    \begin{block}{Introduction}
+        \begin{itemize}
+            \item We want to analyse the behaviour of DPO and KTO training. 
+            \item We analyse gaussian policies and mixtures and run different experiments. 
+        \end{itemize}
+    \end{block}
+
+    \vspace{0.3cm}
+
+    \begin{block}{Goal}
+        \begin{itemize}
+            \item We want to show empirically that KTO plateau in the admissible zone while DPO collapse the distribution at the best point (where the reward is max)
+        \end{itemize}
+    \end{block}
+
+    \vspace{0.3cm}
+
+\end{frame}
+
+% ============================================
+% SECTION 2: Approach / Methodology
+% ============================================
+\section{Data and hyperparameters}
+
+% Slide 4: Proposed Solution Overview
+\begin{frame}{The data}
+    \begin{block}{DPO dataset}
+        \begin{itemize}
+            \item Number of samples: 1000 
+            \item points sampled from \(\mathcal{N}(5, 2^2)\) and \(0.5\mathcal{N}(3, 2^2) + 0.5\mathcal{N}(8, 2^2)\)
+            \item winners represent points close to \(7\)
+        \end{itemize}
+    \end{block}
+
+    \vspace{0.3cm}
+
+    \begin{block}{KTO dataset}
+        \begin{enumerate}
+            \item Number of samples: 1000 
+            \item points sampled from \(\mathcal{N}(5, 2^2)\) and \(0.5\mathcal{N}(3, 2^2) + 0.5\mathcal{N}(8, 2^2)\)
+            \item positive feedback are values in the interval \([7 - \delta, 7 + \delta]\) (\(\delta = 1.5\))
+        \end{enumerate}
+    \end{block}
+\begin{block}{Reward}
+    \begin{itemize}
+        \item Oracle reward: \(-|y-7|\)
+    \end{itemize}
+\end{block}
+\end{frame}
+\begin{frame}{Hyperparameters}
+    \begin{itemize}
+        \item To ensure reproducibility and valid comparison, all hyperparameters are fixed across DPO and KTO
+    \end{itemize}
+
+    
+    \begin{table}
+        \centering
+        \begin{tabular}{cc}
+        \hline
+            \textbf{Hyperparameters} & \textbf{Values}\\
+            \hline
+             \(\beta\)& \(1.0\)\\
+             \(\lambda\)& $1.33$\\
+             Optimizer& Adam\\
+             Learning rate& $1\times10^{-3}$\\
+             \hline
+        \end{tabular}
+        \caption{Training hyperparameters}
+        \label{tab:placeholder}
+    \end{table}
+\end{frame}
+\section{Experiments and results}
+% Slide 5: Architecture/Method Details
+\begin{frame}{KTO acts as a boundary seeker}
+\begin{itemize}
+\item Experiments showed that KTO spread as the desirable zone increase.
+\item KTO tends to spread along all the desirable values
+\end{itemize}
+    \begin{minipage}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{report/figures/impact_of_delta_on_kto_density.png}
+        \caption{KTO spreads with the desirable zone}
+    \end{minipage}
+    \hfill
+    \begin{minipage}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{report/figures/single_kto_zone_sweep.png}
+        \caption{Increasing function \(\sigma(\delta)\)}
+    \end{minipage}
+\end{frame}
+
+% ============================================
+% SECTION 3: Results & Evaluation
+% ============================================
+% Slide 6: Experimental Setup
+\begin{frame}{DPO will prioritize the most rewarded value}
+        \begin{itemize}
+\item DPO peaks at 7
+\item The fine-tuned policy seeks for values with high reward.
+        \end{itemize}
+
+    \begin{minipage}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{report/figures/single_density_projection.png}
+        \caption{The distribution of DPO is more dense around 7}
+    \end{minipage}
+    \hfill
+    \begin{minipage}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{report/figures/single_dpo_implicit_reward.png}
+        \caption{Reward maximum at y = 7}
+    \end{minipage}
+\end{frame}
+
+% Slide 7: Performance Metrics & Baselines
+\begin{frame}{KTO still works with unbalanced data}
+\begin{itemize}
+    \item We trained KTO with on 2 data distribution
+    \item We realized that KTO is still robust in imbalanced settings
+\end{itemize}
+\begin{figure}
+    \centering
+    \includegraphics[width=0.5\linewidth]{report/figures/single_kto_data_sensitivity.png}
+    \caption{50/50 vs 10/90 datasets}
+    \label{fig:placeholder}
+\end{figure}
+
+    \textbf{Key Observation:} The standard deviation in the imbalanced reduce due to few positive feedback.
+\end{frame}
+
+% Slide 8: Key Findings & Visualizations
+\begin{frame}{Entropy collapse}
+\begin{itemize}
+    \item DPO update of \(\sigma\) will continuously tend to zero
+    \item KTO will stabilize at a certain point
+\end{itemize}
+    \begin{minipage}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{report/figures/single_entropy_dynamics.png}
+        \caption{Simple Gaussian}
+    \end{minipage}
+    \hfill
+    \begin{minipage}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{report/figures/mix_entropy_dynamics.png}
+        \caption{Mixture of two Gaussians}
+    \end{minipage}
+\end{frame}
+
+% ============================================
+% SECTION 4: Conclusions & Future Work
+% ============================================
+% Slide 9: Conclusions & Future Work
+\begin{frame}{Impact of KL estimation}
+\begin{itemize}
+    \item The distribution and entropy plot doesn't show significant difference
+    \item For more complex policies  we believe the impact will be noticeable
+\end{itemize}
+    \begin{minipage}{0.36\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{report/figures/single_reference_sampling.png}
+    \end{minipage}
+    \hfill
+    \begin{minipage}{0.36\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{report/figures/mix_reference_sampling.png}
+    \end{minipage}
+
+        \begin{minipage}{0.36\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{report/figures/single_reference_sampling_entropy_dynamics.png}
+        \caption{Simple Gaussian}
+    \end{minipage}
+    \hfill
+    \begin{minipage}{0.36\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{report/figures/mix_reference_sampling_dynamics.png}
+        \caption{Mixture of two Gaussians}
+    \end{minipage}
+\end{frame}
+\begin{frame}{Impact of \(\beta\)}
+\begin{itemize}
+    \item For moderate \(\beta\), the result is a softened distribution shifted toward $y= 7$
+\end{itemize}
+    \begin{figure}
+        \centering
+        \includegraphics[width=0.5\linewidth]{report/figures/single_beta_sweep.png}
+        \caption{When \(\beta\to0\), DPO acts as greedy maximisation}
+        \label{fig:placeholder}
+    \end{figure}
+\end{frame}
+\section{Conclusion}
+% ============================================
+% Slide 10: Conclusion
+% ============================================
+\begin{frame}{Conclusion}
+    \begin{itemize}
+        \item \textbf{Greedy vs. Satisficing:} DPO acts as a high-precision ranker that collapses the distribution onto the best point to maximize reward. KTO acts as a utility-based classifier that moves the distribution into a ``safe zone'' while preserving entropy.
+        \item \textbf{Boundary Seeking:} KTO behaves as a boundary seeker where the final policy spread ($\sigma$) scales with the width of the desirable zone $\delta$.
+        \item \textbf{Entropy Dynamics:} DPO exhibits continuous ``entropy collapse'' as $\sigma \to 0$. KTO stabilizes once the distribution is safely within the boundaries.
+        \item \textbf{Robustness:} KTO remains stable and effective even in imbalanced datasets (e.g., 10\% Good / 90\% Bad), whereas ranking-based methods like DPO may struggle without high-reward pairs.
+        \item \textbf{Implementation Sensitivity:} The choice of KL estimation (analytical, batch-estimated, or running average) is a critical decision boundary shift that must be explicitly specified for reproducibility.
+    \end{itemize}
+\end{frame}
+
+% ============================================
+% NEW SECTION: Added Experiments (Single vs Mixture + Component Evolution)
+% ============================================
+\section{New Experiments}
+
+\begin{frame}{Mixture Component Evolution During Training}
+\begin{itemize}
+    \item Added a dedicated experiment to track each component parameter at every training step.
+    \item We record \(\mu_k\), \(\sigma_k\), and mixture weight \(w_k\) for each component \(k\).
+    \item This allows direct visualization of how components move, spread, and reweight over time.
+\end{itemize}
+
+\begin{figure}
+    \centering
+    \includegraphics[width=0.75\linewidth]{report/figures/mix_component_evolution_kto.png}
+    \caption{KTO mixture: per-component \(\mu,\sigma,w\) evolution across training}
+\end{figure}
+\end{frame}
+
+\begin{frame}{Density Snapshots at 25\% Epoch Milestones}
+\begin{itemize}
+    \item Added milestone density plots at 25\%, 50\%, 75\%, and 100\% epochs.
+    \item Each panel shows: total mixture density + per-component weighted densities.
+    \item We annotate the exact parameters in each panel: \(\mu_k\), \(\sigma_k\), and \(w_k\).
+\end{itemize}
+
+\begin{figure}
+    \centering
+    \includegraphics[width=0.75\linewidth]{report/figures/mix_density_milestones_kto.png}
+    \caption{Density evolution snapshots with component parameters at each milestone}
+\end{figure}
+\end{frame}
+
+\begin{frame}{Robustness: Single vs Mixture (Per Component)}
+\begin{itemize}
+    \item Added robustness sweep over data ratio \(\alpha\in\{0.1,0.3,0.5,0.7,0.9\}\).
+    \item Compare 4 settings: DPO-single, DPO-mixture, KTO-single, KTO-mixture.
+    \item For mixtures, analysis is component-wise (no averaging): \(\mu_k\), \(\sigma_k\), \(w_k\).
+\end{itemize}
+
+\begin{figure}
+    \centering
+    \includegraphics[width=0.75\linewidth]{report/figures/robustness_params_single_vs_mixture.png}
+    \caption{Final parameter comparison versus \(\alpha\), split by DPO and KTO}
+\end{figure}
+\end{frame}
+
+\begin{frame}{Training Dynamics for Robustness Setting}
+\begin{itemize}
+    \item Added a tracked-\(\alpha\) view to inspect parameter trajectories during training.
+    \item Shows per-component dynamics for both KTO-mixture and DPO-mixture.
+    \item Useful to diagnose mode-shift behavior and component specialization over steps.
+\end{itemize}
+
+\begin{figure}
+    \centering
+    \includegraphics[width=0.75\linewidth]{report/figures/robustness_training_dynamics_single_vs_mixture.png}
+    \caption{Per-component dynamics during training for the selected \(\alpha\)}
+\end{figure}
+\end{frame}
+
+\begin{frame}{Reward Plot}
+\begin{itemize}
+    \item Oracle reward is maximized around \(y=7\).
+    \item This reward landscape explains why DPO concentrates near the optimum while KTO prefers a broader acceptable region.
+\end{itemize}
+
+\begin{figure}
+    \centering
+    \includegraphics[width=0.68\linewidth]{report/figures/reward.png}
+    \caption{Reward function used in our synthetic alignment setup}
+\end{figure}
+\end{frame}
+
+% ============================================
+% Slide 10: Questions & Discussion
+% ============================================
+\begin{frame}{Questions \& Discussion}
+    \vspace{2cm}
+    \begin{center}
+        {\Huge \textcolor{kerablue}{Questions?}}
+
+        \vspace{1.5cm}
+
+        {\Large Discussion \& Feedback}
+
+        \vspace{1cm}
+
+        %\textit{Thank you for your attention!}
+    \end{center}
+\end{frame}
+
+% ============================================
+% Slide 11: Thank You
+% ============================================
+\begin{frame}[plain]
+    \vspace{2cm}
+    \begin{center}
+        {\Huge \textcolor{kerablue}{Thank You!}}
+
+        \vspace{1.5cm}
+
+        {\Large for your attention}
+
+        \vspace{1.5cm}
+
+        \textbf{Contact:} \url{your.email@kera.health}
+
+
+
+        \textbf{Code:} \url{github.com/codewithbuwa/alignment_dpo_vs_kto}
+
+        \vspace{0.5cm}
+
+        % Logo added via titlegraphic/logo commands usually, but repeated here if needed
+        \includesvg[height=0.8cm]{Main}
+
+    \end{center}
+\end{frame}
+
+\end{document}

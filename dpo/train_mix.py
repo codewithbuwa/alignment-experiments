@@ -11,8 +11,8 @@ def train_dpo_mixture(ref_policy: GaussianMixturePolicy = REF_POLICY,
     policy = GaussianMixturePolicy(n_components=n_components).to(DEVICE)
     optimizer = optim.Adam(policy.parameters(), lr=lr)
     sigmas = []  # track average sigma for monitoring
-
-    for _ in range(steps):
+    history = []
+    for i in range(steps):
         optimizer.zero_grad()
         h_w = ir.implicit_reward(policy, ref_policy, y_w, beta)
         h_l = ir.implicit_reward(policy, ref_policy, y_l, beta)
@@ -24,5 +24,9 @@ def train_dpo_mixture(ref_policy: GaussianMixturePolicy = REF_POLICY,
         with torch.no_grad():
             avg_sigma = policy.sigmas().mean().item()
             sigmas.append(avg_sigma)
-
+        if i+1%500==0:
+            mu = policy.mus
+            history.append((mu, avg_sigma))
+    for j in history:
+        print(j[0], j[1], "Hello!")
     return policy, sigmas
