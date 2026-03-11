@@ -1,75 +1,36 @@
+"""
+Author: Jordan Kevin Buwa Mbouobda
+Purpose: Build single-Gaussian DPO pair data and KTO labeled data.
+"""
+
 import torch
 
 from .distributions import sample_gaussian
 
 
-def _sample_balanced_dpo_pairs(
-    mu_ref: float,
-    sigma_ref: float,
-    target: float,
-    zone_half_width: float,
-    n: int,
-    good_ratio: float,
-    device: str,
-):
-    zone_min = target - zone_half_width
-    zone_max = target + zone_half_width
-
-    good_needed = int(round(n * good_ratio))
-    bad_needed = n - good_needed
-    good_w = []
-    good_l = []
-    bad_w = []
-    bad_l = []
-
+def _sample_outside_band(mu_ref: float, sigma_ref: float, target: float, radius: float, n: int, device: str):
+    kept = []
     attempts = 0
     max_attempts = 200
     batch = max(256, n)
 
-    while (
-        sum(t.numel() for t in good_w) < good_needed or sum(t.numel() for t in bad_w) < bad_needed
-    ) and attempts < max_attempts:
+    # DPO hardness is controlled by excluding points near the optimum. We keep
+    # sampling until we have enough points outside the forbidden band.
+    while sum(t.numel() for t in kept) < n and attempts < max_attempts:
         attempts += 1
-        y1 = sample_gaussian(mu_ref, sigma_ref, batch, device)
-        y2 = sample_gaussian(mu_ref, sigma_ref, batch, device)
+        y = sample_gaussian(mu_ref, sigma_ref, batch, device)
+        outside = y[torch.abs(y - target) >= radius]
+        if outside.numel() > 0:
+            remaining = n - sum(t.numel() for t in kept)
+            kept.append(outside[:remaining])
 
-        dist1 = torch.abs(y1 - target)
-        dist2 = torch.abs(y2 - target)
-        winner_is_y1 = dist1 <= dist2
+    if not kept:
+        raise RuntimeError("Unable to sample DPO points outside the excluded high-reward band")
 
-        y_w = torch.where(winner_is_y1, y1, y2)
-        y_l = torch.where(winner_is_y1, y2, y1)
-
-        winner_in_zone = (y_w >= zone_min) & (y_w <= zone_max)
-
-        if sum(t.numel() for t in good_w) < good_needed:
-            take_w = y_w[winner_in_zone]
-            take_l = y_l[winner_in_zone]
-            if take_w.numel() > 0:
-                remaining = good_needed - sum(t.numel() for t in good_w)
-                good_w.append(take_w[:remaining])
-                good_l.append(take_l[:remaining])
-
-        if sum(t.numel() for t in bad_w) < bad_needed:
-            take_w = y_w[~winner_in_zone]
-            take_l = y_l[~winner_in_zone]
-            if take_w.numel() > 0:
-                remaining = bad_needed - sum(t.numel() for t in bad_w)
-                bad_w.append(take_w[:remaining])
-                bad_l.append(take_l[:remaining])
-
-    good_w = torch.cat(good_w) if good_w else torch.tensor([], device=device)
-    good_l = torch.cat(good_l) if good_l else torch.tensor([], device=device)
-    bad_w = torch.cat(bad_w) if bad_w else torch.tensor([], device=device)
-    bad_l = torch.cat(bad_l) if bad_l else torch.tensor([], device=device)
-
-    if good_w.numel() < good_needed or bad_w.numel() < bad_needed:
-        raise RuntimeError("Unable to construct DPO pairs with the requested good_ratio")
-
-    y_w = torch.cat([good_w, bad_w], dim=0)
-    y_l = torch.cat([good_l, bad_l], dim=0)
-    perm = torch.randperm(y_w.numel(), device=device)
-    return y_w[perm], y_l[perm]
+    y = torch.cat(kept)
+    if y.numel() < n:
+        raise RuntimeError("Unable to sample enough DPO points outside the excluded high-reward band")
+    return y[:n]
 
 
 def make_dpo_pairs(
@@ -81,26 +42,24 @@ def make_dpo_pairs(
     good_ratio: float = None,
     zone_half_width: float = 1.5,
 ):
-    y1 = sample_gaussian(mu_ref, sigma_ref, n, device)
-    y2 = sample_gaussian(mu_ref, sigma_ref, n, device)
+    # For DPO, good_ratio now controls the width of the excluded high-reward
+    # region through kappa = 1 - good_ratio and radius = kappa * sigma_ref.
+    if good_ratio is None:
+        y1 = sample_gaussian(mu_ref, sigma_ref, n, device)
+        y2 = sample_gaussian(mu_ref, sigma_ref, n, device)
+    else:
+        kappa = 1.0 - good_ratio
+        radius = kappa * sigma_ref
+        y1 = _sample_outside_band(mu_ref, sigma_ref, target, radius, n, device)
+        y2 = _sample_outside_band(mu_ref, sigma_ref, target, radius, n, device)
 
+    # Preference winners are still whichever point is closer to the target.
     dist1 = torch.abs(y1 - target)
     dist2 = torch.abs(y2 - target)
     winner_is_y1 = dist1 <= dist2
 
     y_w = torch.where(winner_is_y1, y1, y2)
     y_l = torch.where(winner_is_y1, y2, y1)
-
-    if good_ratio is not None:
-        return _sample_balanced_dpo_pairs(
-            mu_ref,
-            sigma_ref,
-            target,
-            zone_half_width,
-            n,
-            good_ratio,
-            device,
-        )
 
     return y_w, y_l
 
@@ -133,11 +92,15 @@ def make_kto_samples(
     max_attempts = 200
     batch = max(256, n)
 
+    # KTO directly samples positive and negative examples until the requested
+    # label counts are matched.
     while (len(good_list) < good_needed or len(bad_list) < bad_needed) and attempts < max_attempts:
         attempts += 1
         y = sample_gaussian(mu_ref, sigma_ref, batch, device)
         in_zone = (y >= zone_min) & (y <= zone_max)
 
+        # For KTO, the data-generation step explicitly controls the positive and
+        # negative label counts before shuffling the final labeled dataset.
         if len(good_list) < good_needed:
             y_good = y[in_zone]
             if y_good.numel() > 0:
@@ -163,6 +126,8 @@ def make_kto_samples(
     if good.numel() < good_needed or bad.numel() < bad_needed:
         raise RuntimeError("Unable to sample enough good/bad points; adjust zone or attempts")
 
+    # Shuffle the concatenated labeled examples so the training loader sees a
+    # mixed sequence of positive and negative feedback.
     y = torch.cat([good, bad])
     labels = torch.cat(
         [torch.ones_like(good, dtype=torch.float), torch.zeros_like(bad, dtype=torch.float)]

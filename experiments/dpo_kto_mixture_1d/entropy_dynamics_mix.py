@@ -1,3 +1,8 @@
+"""
+Author: Jordan Kevin Buwa Mbouobda
+Purpose: Plot per-component entropy-related sigma dynamics for mixtures.
+"""
+
 import os
 import sys
 

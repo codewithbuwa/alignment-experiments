@@ -1,3 +1,8 @@
+"""
+Author: Jordan Kevin Buwa Mbouobda
+Purpose: Sweep supervision ratio alpha for single-Gaussian DPO and KTO.
+"""
+
 import os
 import sys
 
@@ -55,7 +60,7 @@ def main():
     plt.figure()
     plt.plot(cfg.data_sensitivity_alphas, dpo_sigmas, marker="o", label="DPO")
     plt.plot(cfg.data_sensitivity_alphas, kto_sigmas, marker="o", label="KTO")
-    plt.xlabel("Supervision Strength (alpha)")
+    plt.xlabel("good_ratio (DPO) / alpha (KTO)")
     plt.ylabel("Final Sigma")
     plt.title("DPO vs KTO Sensitivity Grid")
     plt.legend()

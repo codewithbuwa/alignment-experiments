@@ -1,3 +1,8 @@
+"""
+Author: Jordan Kevin Buwa Mbouobda
+Purpose: Shared plotting helpers for report-ready experiment figures.
+"""
+
 import os
 import torch
 import matplotlib.pyplot as plt

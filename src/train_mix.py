@@ -1,3 +1,8 @@
+"""
+Author: Jordan Kevin Buwa Mbouobda
+Purpose: Train Gaussian-mixture DPO and KTO policies with train/eval splitting.
+"""
+
 import torch
 
 from .config import MixtureDPOKTOConfig
@@ -8,6 +13,8 @@ from .utils import set_seed, train_val_split
 
 def _mixture_entropy(policy: GaussianMixturePolicy, n_samples: int = 512) -> torch.Tensor:
     with torch.no_grad():
+        # The mixture entropy is tracked with a Monte Carlo estimate because we
+        # do not use a closed-form expression for the learned mixture here.
         y = policy.sample(n_samples)
         return -policy.log_prob(y).mean()
 
@@ -31,6 +38,7 @@ def _split_tensors(cfg: MixtureDPOKTOConfig, *tensors):
     n = tensors[0].numel()
     if cfg.eval_fraction <= 0.0:
         return tensors, None
+    # Keep mixture experiments aligned with the single-policy split behavior.
     train_idx, eval_idx = train_val_split(n, cfg.eval_fraction, cfg.seed)
     train_tensors = tuple(t[train_idx.to(t.device)] for t in tensors)
     eval_tensors = tuple(t[eval_idx.to(t.device)] for t in tensors)
@@ -56,6 +64,7 @@ def train_dpo_mixture(ref_policy, cfg: MixtureDPOKTOConfig, good_ratio: float = 
         device=cfg.device,
         good_ratio=good_ratio,
         zone_half_width=cfg.zone_half_width,
+        reference_sigma=cfg.reference_sigma,
     )
     (y_w_train, y_l_train), eval_split = _split_tensors(cfg, y_w, y_l)
 
@@ -64,6 +73,8 @@ def train_dpo_mixture(ref_policy, cfg: MixtureDPOKTOConfig, good_ratio: float = 
 
     for _ in range(cfg.steps):
         optimizer.zero_grad()
+        # The full constrained pair set is used each step so component dynamics
+        # are easier to compare across different imbalance settings.
         h_w = cfg.beta * (policy.log_prob(y_w_train) - ref_policy.log_prob(y_w_train))
         h_l = cfg.beta * (policy.log_prob(y_l_train) - ref_policy.log_prob(y_l_train))
         loss = -torch.mean(torch.log(torch.sigmoid(h_w - h_l)))
@@ -129,6 +140,7 @@ def train_kto_mixture(ref_policy, cfg: MixtureDPOKTOConfig, good_ratio: float = 
             kl = policy.kl_to_ref(ref_policy, n_samples=cfg.dataset_size)
         elif cfg.kl_mode == "running":
             with torch.no_grad():
+                # Running KL smooths the decision-boundary shift over time.
                 kl_batch = policy.kl_to_ref(ref_policy, n_samples=cfg.dataset_size)
                 running_kl = (1 - cfg.kl_ema_decay) * running_kl + cfg.kl_ema_decay * kl_batch
                 kl = running_kl

@@ -1,3 +1,8 @@
+"""
+Author: Jordan Kevin Buwa Mbouobda
+Purpose: Standalone Gaussian-mixture fitting utilities for the auxiliary MLE experiment.
+"""
+
 from dataclasses import dataclass
 from typing import Dict, List
 

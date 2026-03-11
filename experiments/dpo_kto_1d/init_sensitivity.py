@@ -1,3 +1,8 @@
+"""
+Author: Jordan Kevin Buwa Mbouobda
+Purpose: Test around/left/right initialization sensitivity for single-Gaussian policies.
+"""
+
 import os
 import sys
 
@@ -118,6 +123,8 @@ def main():
             dpo_pdf_q = gaussian_pdf(y_vals, dpo_out["history"]["mu"][idx], dpo_out["history"]["sigma"][idx])
             kto_pdf_q = gaussian_pdf(y_vals, kto_out["history"]["mu"][idx], kto_out["history"]["sigma"][idx])
 
+            # Print live parameters on each panel so the montage can be read
+            # without opening the saved summary JSON.
             q_path = os.path.join(figures_dir, f"density_{name}_q{p}.png")
             _plot_density(
                 y_vals,

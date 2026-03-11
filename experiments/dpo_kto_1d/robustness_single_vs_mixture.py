@@ -1,3 +1,8 @@
+"""
+Author: Jordan Kevin Buwa Mbouobda
+Purpose: Compare single and mixture policies under the same supervision-ratio sweep.
+"""
+
 import argparse
 import os
 import sys
@@ -19,6 +24,16 @@ def parse_alpha_list(alpha_csv: str):
     return [float(x.strip()) for x in alpha_csv.split(",") if x.strip()]
 
 
+def _effective_good_mass_dpo(y_w: torch.Tensor, cfg: ExperimentConfig) -> float:
+    zone_min = cfg.target - cfg.zone_half_width
+    zone_max = cfg.target + cfg.zone_half_width
+    return ((y_w >= zone_min) & (y_w <= zone_max)).float().mean().item()
+
+
+def _effective_good_mass_kto(labels: torch.Tensor) -> float:
+    return labels.float().mean().item()
+
+
 def plot_summary(results, out_path, n_components):
     x = results["alpha"]
 
@@ -27,7 +42,7 @@ def plot_summary(results, out_path, n_components):
     for k in range(n_components):
         axes[0, 0].plot(x, results[f"dpo_mix_mu_c{k}"], marker="o", label=f"Mix C{k} mu")
     axes[0, 0].set_title("DPO: Final Mu by Component")
-    axes[0, 0].set_xlabel("Good ratio (alpha)")
+    axes[0, 0].set_xlabel("DPO good_ratio / KTO alpha")
     axes[0, 0].set_ylabel("Mu")
     axes[0, 0].grid(True, alpha=0.3)
     axes[0, 0].legend()
@@ -36,7 +51,7 @@ def plot_summary(results, out_path, n_components):
     for k in range(n_components):
         axes[0, 1].plot(x, results[f"kto_mix_mu_c{k}"], marker="o", label=f"Mix C{k} mu")
     axes[0, 1].set_title("KTO: Final Mu by Component")
-    axes[0, 1].set_xlabel("Good ratio (alpha)")
+    axes[0, 1].set_xlabel("DPO good_ratio / KTO alpha")
     axes[0, 1].set_ylabel("Mu")
     axes[0, 1].grid(True, alpha=0.3)
     axes[0, 1].legend()
@@ -45,7 +60,7 @@ def plot_summary(results, out_path, n_components):
     for k in range(n_components):
         axes[1, 0].plot(x, results[f"dpo_mix_sigma_c{k}"], marker="o", label=f"Mix C{k} sigma")
     axes[1, 0].set_title("DPO: Final Sigma by Component")
-    axes[1, 0].set_xlabel("Good ratio (alpha)")
+    axes[1, 0].set_xlabel("DPO good_ratio / KTO alpha")
     axes[1, 0].set_ylabel("Sigma")
     axes[1, 0].grid(True, alpha=0.3)
     axes[1, 0].legend()
@@ -54,7 +69,7 @@ def plot_summary(results, out_path, n_components):
     for k in range(n_components):
         axes[1, 1].plot(x, results[f"kto_mix_sigma_c{k}"], marker="o", label=f"Mix C{k} sigma")
     axes[1, 1].set_title("KTO: Final Sigma by Component")
-    axes[1, 1].set_xlabel("Good ratio (alpha)")
+    axes[1, 1].set_xlabel("DPO good_ratio / KTO alpha")
     axes[1, 1].set_ylabel("Sigma")
     axes[1, 1].grid(True, alpha=0.3)
     axes[1, 1].legend()
@@ -82,7 +97,7 @@ def plot_training_dynamics(tracked, out_path, n_components):
         axes[2, 1].plot(x, tracked["dpo_mix"]["weights"][:, k], label=f"C{k}")
 
     axes[0, 0].set_title(f"KTO Mixture (alpha={tracked['alpha']:.2f})")
-    axes[0, 1].set_title(f"DPO Mixture (alpha={tracked['alpha']:.2f})")
+    axes[0, 1].set_title(f"DPO Mixture (good_ratio={tracked['alpha']:.2f})")
 
     axes[0, 0].set_ylabel("Mu")
     axes[1, 0].set_ylabel("Sigma")
@@ -147,8 +162,10 @@ def main():
         "alpha": [],
         "dpo_single_mu": [],
         "dpo_single_sigma": [],
+        "dpo_single_eff": [],
         "kto_single_mu": [],
         "kto_single_sigma": [],
+        "kto_single_eff": [],
     }
     for k in range(args.n_components):
         results[f"dpo_mix_mu_c{k}"] = []
@@ -171,6 +188,7 @@ def main():
             zone_half_width=cfg.zone_half_width,
         )
         dpo_out = train_dpo(y_w, y_l, cfg)
+        dpo_eff = _effective_good_mass_dpo(y_w, cfg)
 
         y, labels = make_kto_samples(
             cfg.mu_ref,
@@ -184,6 +202,7 @@ def main():
             good_ratio=alpha,
         )
         kto_out = train_kto(y, labels, cfg)
+        kto_eff = _effective_good_mass_kto(labels)
 
         ref_policy = make_reference_mixture(mix_cfg.n_components, cfg.mu_ref, cfg.sigma_ref, cfg.device)
         dpo_mix, _, dpo_mix_hist, _ = train_dpo_mixture(ref_policy, mix_cfg, good_ratio=alpha)
@@ -192,8 +211,10 @@ def main():
         results["alpha"].append(alpha)
         results["dpo_single_mu"].append(dpo_out["policy"].mu.item())
         results["dpo_single_sigma"].append(dpo_out["policy"].sigma.item())
+        results["dpo_single_eff"].append(dpo_eff)
         results["kto_single_mu"].append(kto_out["policy"].mu.item())
         results["kto_single_sigma"].append(kto_out["policy"].sigma.item())
+        results["kto_single_eff"].append(kto_eff)
 
         dpo_mus = dpo_mix.mus.detach().cpu().tolist()
         dpo_sigmas = dpo_mix.sigmas().detach().cpu().tolist()

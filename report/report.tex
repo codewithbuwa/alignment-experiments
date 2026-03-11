@@ -15,7 +15,7 @@
 \maketitle
 
 \section*{Abstract}
-We reproduce and extend the experiments described in \textit{Alignment\_first\_step.pdf}. In a continuous 1D scalar world with Gaussian policies, we compare Direct Preference Optimization (DPO) against Kahneman--Tversky Optimization (KTO). The results align with the PDF's expectations: DPO aggressively concentrates mass near the optimal point (greedy maximization), while KTO moves into a desirable zone and preserves entropy (satisficing). We further study KL-estimation modes, sensitivity to supervision strength, beta scaling, zone width, and initialization effects. We also extend the setup to Gaussian mixtures, showing component-wise dynamics and weight evolution.
+We reproduce and extend the experiments described in \textit{Alignment\_first\_step.pdf}. In a continuous 1D scalar world with Gaussian policies, we compare Direct Preference Optimization (DPO) against Kahneman--Tversky Optimization (KTO). The results align with the PDF's expectations: DPO aggressively concentrates mass near the optimal point (greedy maximization), while KTO moves into a desirable zone and preserves entropy (satisficing). We further study KL-estimation modes, sensitivity to DPO `good\_ratio` and KTO supervision ratio, beta scaling, zone width, and initialization effects. We also extend the setup to Gaussian mixtures, showing component-wise dynamics and weight evolution.
 
 \section{Experimental Setup (Aligned to the PDF)}
 \textbf{Environment:} 1D real line.\newline
@@ -59,7 +59,7 @@ We reproduce and extend the experiments described in \textit{Alignment\_first\_s
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.85\textwidth]{figures/single_data_sensitivity.png}
-    \caption{Sensitivity grid: final sigma vs. supervision strength.}
+    \caption{Sensitivity grid: final sigma vs. DPO good\_ratio and KTO supervision ratio.}
 \end{figure}
 
 \subsection{Beta and Zone Width Sweeps}
@@ -188,7 +188,7 @@ We reproduce and extend the experiments described in \textit{Alignment\_first\_s
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.95\textwidth]{figures/robustness_training_dynamics_single_vs_mixture.png}
-    \caption{Training dynamics for the tracked alpha (single vs mixture).}
+    \caption{Training dynamics for the tracked DPO good\_ratio / KTO alpha setting (single vs mixture).}
 \end{figure}
 
 \section{Gaussian Mixture MLE (Auxiliary)}

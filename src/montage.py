@@ -1,3 +1,8 @@
+"""
+Author: Jordan Kevin Buwa Mbouobda
+Purpose: Combine multiple saved figures into montage images.
+"""
+
 import math
 import os
 

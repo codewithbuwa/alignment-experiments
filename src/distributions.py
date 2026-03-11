@@ -1,3 +1,8 @@
+"""
+Author: Jordan Kevin Buwa Mbouobda
+Purpose: Sampling and analytic distribution utilities used across experiments.
+"""
+
 import math
 import torch
 

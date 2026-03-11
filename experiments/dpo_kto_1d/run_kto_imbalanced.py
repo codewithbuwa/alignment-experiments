@@ -1,3 +1,8 @@
+"""
+Author: Jordan Kevin Buwa Mbouobda
+Purpose: Run the imbalanced single-Gaussian KTO experiment.
+"""
+
 import argparse
 import os
 import sys

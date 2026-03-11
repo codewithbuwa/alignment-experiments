@@ -1,3 +1,8 @@
+"""
+Author: Jordan Kevin Buwa Mbouobda
+Purpose: Compare 10% and 50% imbalance for single-Gaussian DPO and KTO.
+"""
+
 import argparse
 import os
 import sys
@@ -14,8 +19,18 @@ from src.train import train_dpo, train_kto
 from src.utils import ensure_dir, export_report_figure, get_timestamp, save_json, set_seed, update_latest_paths
 
 
-def parse_alpha_list(alpha_csv: str):
-    return [float(x.strip()) for x in alpha_csv.split(",") if x.strip()]
+def parse_ratio_list(csv_text: str):
+    return [float(x.strip()) for x in csv_text.split(",") if x.strip()]
+
+
+def _effective_good_mass_dpo(y_w: torch.Tensor, cfg: ExperimentConfig) -> float:
+    zone_min = cfg.target - cfg.zone_half_width
+    zone_max = cfg.target + cfg.zone_half_width
+    return ((y_w >= zone_min) & (y_w <= zone_max)).float().mean().item()
+
+
+def _effective_good_mass_kto(labels: torch.Tensor) -> float:
+    return labels.float().mean().item()
 
 
 def _param_box(ax, dpo_out, kto_out):
@@ -37,12 +52,14 @@ def _param_box(ax, dpo_out, kto_out):
     )
 
 
-def plot_entropy(results, out_path):
+def plot_entropy(dpo_results, kto_results, out_path):
     fig, axes = plt.subplots(1, 2, figsize=(11, 4), sharey=True)
-    for alpha, payload in results.items():
-        label = f"alpha={alpha:.1f}"
-        axes[0].plot(payload["dpo"]["history"]["entropy"], label=label)
-        axes[1].plot(payload["kto"]["history"]["entropy"], label=label)
+    for good_ratio, payload in dpo_results.items():
+        label = f"good_ratio={good_ratio:.1f}, eff={payload['effective_good_mass']:.2f}"
+        axes[0].plot(payload["history"]["entropy"], label=label)
+    for alpha, payload in kto_results.items():
+        label = f"alpha={alpha:.1f}, eff={payload['effective_good_mass']:.2f}"
+        axes[1].plot(payload["history"]["entropy"], label=label)
 
     axes[0].set_title("DPO Entropy")
     axes[1].set_title("KTO Entropy")
@@ -57,14 +74,16 @@ def plot_entropy(results, out_path):
     plt.close(fig)
 
 
-def plot_parameter_dynamics(results, out_path):
+def plot_parameter_dynamics(dpo_results, kto_results, out_path):
     fig, axes = plt.subplots(2, 2, figsize=(12, 8), sharex=True)
-    for alpha, payload in results.items():
-        label = f"alpha={alpha:.1f}"
-        axes[0, 0].plot(payload["dpo"]["history"]["mu"], label=label)
-        axes[1, 0].plot(payload["dpo"]["history"]["sigma"], label=label)
-        axes[0, 1].plot(payload["kto"]["history"]["mu"], label=label)
-        axes[1, 1].plot(payload["kto"]["history"]["sigma"], label=label)
+    for good_ratio, payload in dpo_results.items():
+        label = f"good_ratio={good_ratio:.1f}, eff={payload['effective_good_mass']:.2f}"
+        axes[0, 0].plot(payload["history"]["mu"], label=label)
+        axes[1, 0].plot(payload["history"]["sigma"], label=label)
+    for alpha, payload in kto_results.items():
+        label = f"alpha={alpha:.1f}, eff={payload['effective_good_mass']:.2f}"
+        axes[0, 1].plot(payload["history"]["mu"], label=label)
+        axes[1, 1].plot(payload["history"]["sigma"], label=label)
 
     axes[0, 0].set_title("DPO Mu")
     axes[1, 0].set_title("DPO Sigma")
@@ -82,56 +101,75 @@ def plot_parameter_dynamics(results, out_path):
     plt.close(fig)
 
 
-def plot_density_grid(results, cfg: ExperimentConfig, out_path):
+def plot_density_grid(dpo_results, kto_results, cfg: ExperimentConfig, out_path):
     y_vals = torch.linspace(cfg.y_min, cfg.y_max, 1000)
     ref_pdf = gaussian_pdf(y_vals, cfg.mu_ref, cfg.sigma_ref)
-    alphas = sorted(results.keys())
+    dpo_ratios = sorted(dpo_results.keys())
+    kto_alphas = sorted(kto_results.keys())
 
-    fig, axes = plt.subplots(2, len(alphas), figsize=(5 * len(alphas), 8), sharex=True, sharey=True)
-    if len(alphas) == 1:
+    n_cols = max(len(dpo_ratios), len(kto_alphas))
+    fig, axes = plt.subplots(2, n_cols, figsize=(5 * n_cols, 8), sharex=True, sharey=True)
+    if n_cols == 1:
         axes = axes.reshape(2, 1)
 
     zone_mask = (y_vals >= cfg.target - cfg.zone_half_width) & (y_vals <= cfg.target + cfg.zone_half_width)
     zone_x = y_vals[zone_mask]
 
-    for col, alpha in enumerate(alphas):
-        payload = results[alpha]
-        dpo_pdf = gaussian_pdf(y_vals, payload["dpo"]["policy"].mu.item(), payload["dpo"]["policy"].sigma.item())
-        kto_pdf = gaussian_pdf(y_vals, payload["kto"]["policy"].mu.item(), payload["kto"]["policy"].sigma.item())
-
+    for col in range(n_cols):
         dpo_ax = axes[0, col]
         kto_ax = axes[1, col]
 
-        for ax, pdf, title in [
-            (dpo_ax, dpo_pdf, f"DPO alpha={alpha:.1f}"),
-            (kto_ax, kto_pdf, f"KTO alpha={alpha:.1f}"),
-        ]:
-            ax.plot(y_vals.numpy(), ref_pdf.numpy(), linestyle="--", color="black", label="Reference")
-            ax.plot(y_vals.numpy(), pdf.numpy(), color="tab:blue", label="Policy")
-            ax.fill_between(zone_x.numpy(), y1=1, alpha=0.1, label="Desirable Zone")
-            ax.set_title(title)
-            ax.grid(True, alpha=0.3)
+        if col < len(dpo_ratios):
+            good_ratio = dpo_ratios[col]
+            payload = dpo_results[good_ratio]
+            dpo_pdf = gaussian_pdf(y_vals, payload["policy"].mu.item(), payload["policy"].sigma.item())
+            dpo_ax.plot(y_vals.numpy(), ref_pdf.numpy(), linestyle="--", color="black", label="Reference")
+            dpo_ax.plot(y_vals.numpy(), dpo_pdf.numpy(), color="tab:blue", label="Policy")
+            dpo_ax.fill_between(zone_x.numpy(), y1=1, alpha=0.1, label="Desirable Zone")
+            dpo_ax.set_title(f"DPO good_ratio={good_ratio:.1f}")
+            dpo_ax.grid(True, alpha=0.3)
+            dpo_ax.text(
+                0.02,
+                0.98,
+                (
+                    f"mu={payload['policy'].mu.item():.2f}\n"
+                    f"sigma={payload['policy'].sigma.item():.2f}\n"
+                    f"eff={payload['effective_good_mass']:.2f}"
+                ),
+                transform=dpo_ax.transAxes,
+                va="top",
+                ha="left",
+                fontsize=8,
+                bbox={"boxstyle": "round,pad=0.3", "facecolor": "white", "alpha": 0.85, "edgecolor": "0.7"},
+            )
+        else:
+            dpo_ax.axis("off")
 
-        dpo_ax.text(
-            0.02,
-            0.98,
-            f"mu={payload['dpo']['policy'].mu.item():.2f}\nsigma={payload['dpo']['policy'].sigma.item():.2f}",
-            transform=dpo_ax.transAxes,
-            va="top",
-            ha="left",
-            fontsize=8,
-            bbox={"boxstyle": "round,pad=0.3", "facecolor": "white", "alpha": 0.85, "edgecolor": "0.7"},
-        )
-        kto_ax.text(
-            0.02,
-            0.98,
-            f"mu={payload['kto']['policy'].mu.item():.2f}\nsigma={payload['kto']['policy'].sigma.item():.2f}",
-            transform=kto_ax.transAxes,
-            va="top",
-            ha="left",
-            fontsize=8,
-            bbox={"boxstyle": "round,pad=0.3", "facecolor": "white", "alpha": 0.85, "edgecolor": "0.7"},
-        )
+        if col < len(kto_alphas):
+            alpha = kto_alphas[col]
+            payload = kto_results[alpha]
+            kto_pdf = gaussian_pdf(y_vals, payload["policy"].mu.item(), payload["policy"].sigma.item())
+            kto_ax.plot(y_vals.numpy(), ref_pdf.numpy(), linestyle="--", color="black", label="Reference")
+            kto_ax.plot(y_vals.numpy(), kto_pdf.numpy(), color="tab:blue", label="Policy")
+            kto_ax.fill_between(zone_x.numpy(), y1=1, alpha=0.1, label="Desirable Zone")
+            kto_ax.set_title(f"KTO alpha={alpha:.1f}")
+            kto_ax.grid(True, alpha=0.3)
+            kto_ax.text(
+                0.02,
+                0.98,
+                (
+                    f"mu={payload['policy'].mu.item():.2f}\n"
+                    f"sigma={payload['policy'].sigma.item():.2f}\n"
+                    f"eff={payload['effective_good_mass']:.2f}"
+                ),
+                transform=kto_ax.transAxes,
+                va="top",
+                ha="left",
+                fontsize=8,
+                bbox={"boxstyle": "round,pad=0.3", "facecolor": "white", "alpha": 0.85, "edgecolor": "0.7"},
+            )
+        else:
+            kto_ax.axis("off")
 
     axes[0, 0].set_ylabel("Density")
     axes[1, 0].set_ylabel("Density")
@@ -146,8 +184,9 @@ def plot_density_grid(results, cfg: ExperimentConfig, out_path):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Compare 10% vs 50% imbalance for single-Gaussian DPO and KTO.")
-    parser.add_argument("--alphas", type=str, default="0.1,0.5")
+    parser = argparse.ArgumentParser(description="Compare DPO good_ratio settings and KTO alpha settings for single Gaussians.")
+    parser.add_argument("--dpo-good-ratios", type=str, default="0.1,1.0")
+    parser.add_argument("--kto-alphas", type=str, default="0.1,0.5")
     parser.add_argument("--delta", type=float, default=0.0)
     args = parser.parse_args()
 
@@ -161,17 +200,27 @@ def main():
     ensure_dir(figures_dir)
     ensure_dir(runs_dir)
 
-    results = {}
-    for alpha in parse_alpha_list(args.alphas):
+    dpo_results = {}
+    for good_ratio in parse_ratio_list(args.dpo_good_ratios):
         y_w, y_l = make_dpo_pairs(
             cfg.mu_ref,
             cfg.sigma_ref,
             cfg.target,
             cfg.dataset_size,
             cfg.device,
-            good_ratio=alpha,
+            good_ratio=good_ratio,
             zone_half_width=cfg.zone_half_width,
         )
+        dpo_out = train_dpo(y_w, y_l, cfg)
+        dpo_results[good_ratio] = {
+            "policy": dpo_out["policy"],
+            "history": dpo_out["history"],
+            "splits": dpo_out["splits"],
+            "effective_good_mass": _effective_good_mass_dpo(y_w, cfg),
+        }
+
+    kto_results = {}
+    for alpha in parse_ratio_list(args.kto_alphas):
         y, labels = make_kto_samples(
             cfg.mu_ref,
             cfg.sigma_ref,
@@ -183,18 +232,21 @@ def main():
             delta=args.delta,
             good_ratio=alpha,
         )
-        results[alpha] = {
-            "dpo": train_dpo(y_w, y_l, cfg),
-            "kto": train_kto(y, labels, cfg),
+        kto_out = train_kto(y, labels, cfg)
+        kto_results[alpha] = {
+            "policy": kto_out["policy"],
+            "history": kto_out["history"],
+            "splits": kto_out["splits"],
+            "effective_good_mass": _effective_good_mass_kto(labels),
         }
 
     entropy_path = os.path.join(figures_dir, "imbalance_entropy.png")
     density_path = os.path.join(figures_dir, "imbalance_density_grid.png")
     params_path = os.path.join(figures_dir, "imbalance_parameter_dynamics.png")
 
-    plot_entropy(results, entropy_path)
-    plot_density_grid(results, cfg, density_path)
-    plot_parameter_dynamics(results, params_path)
+    plot_entropy(dpo_results, kto_results, entropy_path)
+    plot_density_grid(dpo_results, kto_results, cfg, density_path)
+    plot_parameter_dynamics(dpo_results, kto_results, params_path)
 
     export_report_figure(entropy_path, "single_imbalance_entropy.png")
     export_report_figure(density_path, "single_imbalance_density.png")
@@ -204,19 +256,24 @@ def main():
     save_json(
         os.path.join(runs_dir, "imbalance_summary.json"),
         {
-            str(alpha): {
-                "dpo": {
-                    "final_mu": payload["dpo"]["policy"].mu.item(),
-                    "final_sigma": payload["dpo"]["policy"].sigma.item(),
-                    "splits": payload["dpo"]["splits"],
-                },
-                "kto": {
-                    "final_mu": payload["kto"]["policy"].mu.item(),
-                    "final_sigma": payload["kto"]["policy"].sigma.item(),
-                    "splits": payload["kto"]["splits"],
-                },
-            }
-            for alpha, payload in results.items()
+            "dpo": {
+                str(good_ratio): {
+                    "final_mu": payload["policy"].mu.item(),
+                    "final_sigma": payload["policy"].sigma.item(),
+                    "splits": payload["splits"],
+                    "effective_good_mass": payload["effective_good_mass"],
+                }
+                for good_ratio, payload in dpo_results.items()
+            },
+            "kto": {
+                str(alpha): {
+                    "final_mu": payload["policy"].mu.item(),
+                    "final_sigma": payload["policy"].sigma.item(),
+                    "splits": payload["splits"],
+                    "effective_good_mass": payload["effective_good_mass"],
+                }
+                for alpha, payload in kto_results.items()
+            },
         },
     )
 

@@ -1,3 +1,8 @@
+"""
+Author: Jordan Kevin Buwa Mbouobda
+Purpose: Generate the main single-Gaussian DPO vs KTO figures.
+"""
+
 import argparse
 import os
 import sys

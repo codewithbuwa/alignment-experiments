@@ -1,3 +1,8 @@
+"""
+Author: Jordan Kevin Buwa Mbouobda
+Purpose: Plot final implicit reward curves and oracle comparison for single Gaussians.
+"""
+
 import os
 import sys
 import torch

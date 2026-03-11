@@ -1,3 +1,8 @@
+"""
+Author: Jordan Kevin Buwa Mbouobda
+Purpose: Track and plot per-component mixture parameter evolution over training.
+"""
+
 import os
 import sys
 

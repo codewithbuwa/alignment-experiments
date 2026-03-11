@@ -1,3 +1,8 @@
+"""
+Author: Jordan Kevin Buwa Mbouobda
+Purpose: Fit a Gaussian mixture with MLE and track parameter recovery.
+"""
+
 import argparse
 import os
 import sys

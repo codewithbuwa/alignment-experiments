@@ -1,3 +1,8 @@
+"""
+Author: Jordan Kevin Buwa Mbouobda
+Purpose: General experiment utilities for seeding, serialization, and figure export.
+"""
+
 import json
 import os
 import random

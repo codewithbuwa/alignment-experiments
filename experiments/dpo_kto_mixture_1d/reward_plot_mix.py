@@ -1,3 +1,8 @@
+"""
+Author: Jordan Kevin Buwa Mbouobda
+Purpose: Plot final implicit reward curves for Gaussian-mixture policies.
+"""
+
 import os
 import sys
 

@@ -1,3 +1,8 @@
+"""
+Author: Jordan Kevin Buwa Mbouobda
+Purpose: Sweep KTO zone width and plot the resulting density and sigma changes.
+"""
+
 import os
 import sys
 

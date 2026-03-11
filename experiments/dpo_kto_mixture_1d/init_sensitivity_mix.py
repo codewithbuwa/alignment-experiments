@@ -1,3 +1,8 @@
+"""
+Author: Jordan Kevin Buwa Mbouobda
+Purpose: Test around/left/right initialization sensitivity for mixture policies.
+"""
+
 import os
 import sys
 
@@ -148,6 +153,8 @@ def main():
             dpo_pdf_q = _mixture_pdf(y_vals, dpo_hist["mus"][idx], dpo_hist["sigmas"][idx], dpo_hist["logits"][idx])
             kto_pdf_q = _mixture_pdf(y_vals, kto_hist["mus"][idx], kto_hist["sigmas"][idx], kto_hist["logits"][idx])
 
+            # Each milestone shows every component's parameters so component
+            # movement and reweighting are visible directly on the figure.
             q_path = os.path.join(figures_dir, f"density_{name}_q{p}.png")
             _plot_density(
                 y_vals,

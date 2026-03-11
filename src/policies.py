@@ -1,3 +1,8 @@
+"""
+Author: Jordan Kevin Buwa Mbouobda
+Purpose: Single-Gaussian and Gaussian-mixture policy parameterizations.
+"""
+
 import math
 import torch
 import torch.nn as nn

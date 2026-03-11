@@ -1,3 +1,8 @@
+"""
+Author: Jordan Kevin Buwa Mbouobda
+Purpose: Train single-Gaussian DPO and KTO policies with train/eval splitting.
+"""
+
 from dataclasses import asdict
 from typing import Dict, List
 
@@ -46,6 +51,8 @@ def _split_tensors(cfg: ExperimentConfig, *tensors):
     n = tensors[0].numel()
     if cfg.eval_fraction <= 0.0:
         return tensors, None
+    # Centralize the split here so every single-policy experiment gets the same
+    # train/eval handling without repeating script logic.
     train_idx, eval_idx = train_val_split(n, cfg.eval_fraction, cfg.seed)
     train_tensors = tuple(t[train_idx.to(t.device)] for t in tensors)
     eval_tensors = tuple(t[eval_idx.to(t.device)] for t in tensors)
@@ -73,6 +80,8 @@ def train_dpo(y_w: torch.Tensor, y_l: torch.Tensor, cfg: ExperimentConfig) -> Di
 
         with torch.no_grad():
             if eval_split is not None:
+                # Held-out loss is evaluated with the same objective to keep the
+                # training and evaluation curves directly comparable.
                 eval_loss = dpo_loss(
                     eval_split[0],
                     eval_split[1],
@@ -122,6 +131,8 @@ def train_kto(y: torch.Tensor, labels: torch.Tensor, cfg: ExperimentConfig) -> D
             kl_value = kl_gaussian(policy.mu, policy.sigma, cfg.mu_ref, cfg.sigma_ref)
 
         if not cfg.kl_grad:
+            # Most runs treat the KL term as a fixed boundary-shift signal rather
+            # than differentiating through the estimate itself.
             kl_value = kl_value.detach()
 
         kl_value = tracker.update(kl_value)

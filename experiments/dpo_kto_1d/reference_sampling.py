@@ -1,3 +1,8 @@
+"""
+Author: Jordan Kevin Buwa Mbouobda
+Purpose: Compare KTO KL-estimation modes for the single-Gaussian setup.
+"""
+
 import os
 import sys
 

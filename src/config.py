@@ -1,3 +1,8 @@
+"""
+Author: Jordan Kevin Buwa Mbouobda
+Purpose: Shared experiment configuration dataclasses for single and mixture runs.
+"""
+
 from dataclasses import dataclass, field
 from typing import List, Optional
 
@@ -63,6 +68,7 @@ class MixtureDPOKTOConfig:
     eval_fraction: float = 0.2
 
     target: float = 7.0
+    reference_sigma: float = 2.0
 
     beta: float = 1.0
     kto_gamma: float = 1.33

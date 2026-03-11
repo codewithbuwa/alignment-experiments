@@ -1,72 +1,34 @@
+"""
+Author: Jordan Kevin Buwa Mbouobda
+Purpose: Build mixture-based DPO pair data and KTO labeled data.
+"""
+
 import torch
 
 
-def _sample_balanced_dpo_pairs(
-    ref_policy,
-    target: float,
-    zone_half_width: float,
-    n: int,
-    good_ratio: float,
-    device: str,
-):
-    zone_min = target - zone_half_width
-    zone_max = target + zone_half_width
-
-    good_needed = int(round(n * good_ratio))
-    bad_needed = n - good_needed
-    good_w = []
-    good_l = []
-    bad_w = []
-    bad_l = []
-
+def _sample_outside_band(ref_policy, target: float, radius: float, n: int, device: str):
+    kept = []
     attempts = 0
     max_attempts = 200
     batch = max(256, n)
 
-    while (
-        sum(t.numel() for t in good_w) < good_needed or sum(t.numel() for t in bad_w) < bad_needed
-    ) and attempts < max_attempts:
+    # The mixture DPO dataset uses the same exclusion idea as the single case:
+    # reject points too close to the optimum before forming preference pairs.
+    while sum(t.numel() for t in kept) < n and attempts < max_attempts:
         attempts += 1
-        y1 = ref_policy.sample(batch).to(device)
-        y2 = ref_policy.sample(batch).to(device)
+        y = ref_policy.sample(batch).to(device)
+        outside = y[torch.abs(y - target) >= radius]
+        if outside.numel() > 0:
+            remaining = n - sum(t.numel() for t in kept)
+            kept.append(outside[:remaining])
 
-        dist1 = torch.abs(y1 - target)
-        dist2 = torch.abs(y2 - target)
-        winner_is_y1 = dist1 <= dist2
+    if not kept:
+        raise RuntimeError("Unable to sample mixture DPO points outside the excluded high-reward band")
 
-        y_w = torch.where(winner_is_y1, y1, y2)
-        y_l = torch.where(winner_is_y1, y2, y1)
-
-        winner_in_zone = (y_w >= zone_min) & (y_w <= zone_max)
-
-        if sum(t.numel() for t in good_w) < good_needed:
-            take_w = y_w[winner_in_zone]
-            take_l = y_l[winner_in_zone]
-            if take_w.numel() > 0:
-                remaining = good_needed - sum(t.numel() for t in good_w)
-                good_w.append(take_w[:remaining])
-                good_l.append(take_l[:remaining])
-
-        if sum(t.numel() for t in bad_w) < bad_needed:
-            take_w = y_w[~winner_in_zone]
-            take_l = y_l[~winner_in_zone]
-            if take_w.numel() > 0:
-                remaining = bad_needed - sum(t.numel() for t in bad_w)
-                bad_w.append(take_w[:remaining])
-                bad_l.append(take_l[:remaining])
-
-    good_w = torch.cat(good_w) if good_w else torch.tensor([], device=device)
-    good_l = torch.cat(good_l) if good_l else torch.tensor([], device=device)
-    bad_w = torch.cat(bad_w) if bad_w else torch.tensor([], device=device)
-    bad_l = torch.cat(bad_l) if bad_l else torch.tensor([], device=device)
-
-    if good_w.numel() < good_needed or bad_w.numel() < bad_needed:
-        raise RuntimeError("Unable to construct mixture DPO pairs with the requested good_ratio")
-
-    y_w = torch.cat([good_w, bad_w], dim=0)
-    y_l = torch.cat([good_l, bad_l], dim=0)
-    perm = torch.randperm(y_w.numel(), device=device)
-    return y_w[perm], y_l[perm]
+    y = torch.cat(kept)
+    if y.numel() < n:
+        raise RuntimeError("Unable to sample enough mixture DPO points outside the excluded high-reward band")
+    return y[:n]
 
 
 def make_mixture_dpo_pairs(
@@ -76,26 +38,26 @@ def make_mixture_dpo_pairs(
     device: str,
     good_ratio: float = None,
     zone_half_width: float = 1.5,
+    reference_sigma: float = 2.0,
 ):
-    y1 = ref_policy.sample(n).to(device)
-    y2 = ref_policy.sample(n).to(device)
+    # For mixture DPO, use the same kappa = 1 - good_ratio exclusion rule as
+    # the single setup, scaled by the reference sigma.
+    if good_ratio is None:
+        y1 = ref_policy.sample(n).to(device)
+        y2 = ref_policy.sample(n).to(device)
+    else:
+        kappa = 1.0 - good_ratio
+        radius = kappa * reference_sigma
+        y1 = _sample_outside_band(ref_policy, target, radius, n, device)
+        y2 = _sample_outside_band(ref_policy, target, radius, n, device)
 
+    # Winners are whichever points stay closest to the target after exclusion.
     dist1 = torch.abs(y1 - target)
     dist2 = torch.abs(y2 - target)
     winner_is_y1 = dist1 <= dist2
 
     y_w = torch.where(winner_is_y1, y1, y2)
     y_l = torch.where(winner_is_y1, y2, y1)
-
-    if good_ratio is not None:
-        return _sample_balanced_dpo_pairs(
-            ref_policy,
-            target,
-            zone_half_width,
-            n,
-            good_ratio,
-            device,
-        )
 
     return y_w, y_l
 
@@ -128,11 +90,15 @@ def make_mixture_kto_samples(
     max_attempts = 200
     batch = max(256, n)
 
+    # Mixture KTO reuses the same good/bad count matching pattern as the
+    # single-Gaussian sampler.
     while (len(good_list) < good_needed or len(bad_list) < bad_needed) and attempts < max_attempts:
         attempts += 1
         y = ref_policy.sample(batch).to(device)
         in_zone = (y >= zone_min) & (y <= zone_max)
 
+        # As in the single-Gaussian KTO setup, we build the labeled dataset by
+        # explicitly collecting the requested number of positive and negative samples.
         if len(good_list) < good_needed:
             y_good = y[in_zone]
             if y_good.numel() > 0:
@@ -158,6 +124,7 @@ def make_mixture_kto_samples(
     if good.numel() < good_needed or bad.numel() < bad_needed:
         raise RuntimeError("Unable to sample enough good/bad points from mixture reference.")
 
+    # Shuffle after concatenation so the final labeled dataset is not ordered by class.
     y = torch.cat([good, bad])
     labels = torch.cat(
         [torch.ones_like(good, dtype=torch.float), torch.zeros_like(bad, dtype=torch.float)]

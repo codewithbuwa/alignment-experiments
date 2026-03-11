@@ -13,7 +13,8 @@ It is organized to match the structure and experimental intent of `Alignment_fir
 - Oracle reward:
   `R(y) = -|y - 7|`.
 - DPO data:
-  sample pairs from the reference; the winner is the point closer to `7`.
+  sample pairs from the reference; if `good_ratio` is set, compute `kappa = 1 - good_ratio`,
+  exclude points inside `|y - 7| < kappa * sigma_ref`, then define the winner as the point closer to `7`.
 - KTO data:
   sample single points from the reference; label as good if `y` falls inside the desirable zone.
 
@@ -213,7 +214,7 @@ python3 experiments/dpo_kto_1d/data_sensitivity.py
 ```
 
 Question answered:
-- How do DPO and KTO respond as supervision strength `alpha` changes?
+- How do DPO `good_ratio` and KTO supervision ratio `alpha` affect the final policy?
 
 10. DPO-only balanced vs imbalanced comparison
 

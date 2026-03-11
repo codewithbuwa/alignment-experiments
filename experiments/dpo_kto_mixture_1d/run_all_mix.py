@@ -1,3 +1,8 @@
+"""
+Author: Jordan Kevin Buwa Mbouobda
+Purpose: Run the main Gaussian-mixture DPO and KTO experiment suite.
+"""
+
 import os
 import subprocess
 import sys

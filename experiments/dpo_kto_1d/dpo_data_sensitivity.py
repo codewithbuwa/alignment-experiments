@@ -1,3 +1,8 @@
+"""
+Author: Jordan Kevin Buwa Mbouobda
+Purpose: Compare balanced and imbalanced DPO sigma dynamics.
+"""
+
 import os
 import sys
 
@@ -45,11 +50,11 @@ def main():
     imb_out = train_dpo(y_w, y_l, cfg)
 
     plt.figure()
-    plt.plot(bal_out["history"]["sigma"], label="Balanced (50/50)")
-    plt.plot(imb_out["history"]["sigma"], label="Imbalanced (10/90)", linestyle="dashed")
+    plt.plot(bal_out["history"]["sigma"], label="good_ratio=0.5")
+    plt.plot(imb_out["history"]["sigma"], label="good_ratio=0.1", linestyle="dashed")
     plt.xlabel("Training Step")
     plt.ylabel("Sigma")
-    plt.title("Data Sensitivity Test (DPO)")
+    plt.title("DPO Sensitivity Under Excluded High-Reward Region")
     plt.legend()
     plt.savefig(os.path.join(figures_dir, "dpo_data_sensitivity.png"))
     plt.close()

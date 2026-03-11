@@ -1,3 +1,8 @@
+"""
+Author: Jordan Kevin Buwa Mbouobda
+Purpose: DPO and KTO objective functions for Gaussian policies.
+"""
+
 import torch
 
 from .distributions import gaussian_log_prob

@@ -1,3 +1,8 @@
+"""
+Author: Jordan Kevin Buwa Mbouobda
+Purpose: Run the baseline single-Gaussian DPO experiment.
+"""
+
 import argparse
 import os
 import sys

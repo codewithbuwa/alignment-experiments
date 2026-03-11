@@ -1,3 +1,8 @@
+"""
+Author: Jordan Kevin Buwa Mbouobda
+Purpose: Plot entropy dynamics for single-Gaussian DPO and KTO runs.
+"""
+
 import os
 import sys
 

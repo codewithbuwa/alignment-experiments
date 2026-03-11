@@ -1,3 +1,8 @@
+"""
+Author: Jordan Kevin Buwa Mbouobda
+Purpose: Compare KL-estimation modes for the Gaussian-mixture KTO setup.
+"""
+
 import os
 import sys
 

@@ -1,3 +1,8 @@
+"""
+Author: Jordan Kevin Buwa Mbouobda
+Purpose: Run the report figure generation suite end-to-end.
+"""
+
 import os
 import subprocess
 import sys

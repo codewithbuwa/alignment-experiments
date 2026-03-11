@@ -1,3 +1,8 @@
+"""
+Author: Jordan Kevin Buwa Mbouobda
+Purpose: Run grouped single-Gaussian sensitivity experiments.
+"""
+
 import os
 import sys
 

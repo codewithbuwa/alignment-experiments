@@ -1,3 +1,8 @@
+"""
+Author: Jordan Kevin Buwa Mbouobda
+Purpose: Plot mixture density evolution and final density overlays.
+"""
+
 import os
 import sys
 

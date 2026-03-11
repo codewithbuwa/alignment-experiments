@@ -1,3 +1,8 @@
+"""
+Author: Jordan Kevin Buwa Mbouobda
+Purpose: Sweep beta and track the final concentration of trained policies.
+"""
+
 import os
 import sys
 
