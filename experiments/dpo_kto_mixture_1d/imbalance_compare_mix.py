@@ -52,6 +52,65 @@ def _effective_good_mass_kto_from_history(policy, cfg: ExperimentConfig, n_sampl
         return ((y >= zone_min) & (y <= zone_max)).float().mean().item()
 
 
+def _evaluate_dpo_fresh(policy, ref_policy, cfg: MixtureDPOKTOConfig, base_cfg: ExperimentConfig, good_ratio: float):
+    from src.data_mix import make_mixture_dpo_pairs
+
+    y_w, y_l = make_mixture_dpo_pairs(
+        ref_policy,
+        target=cfg.target,
+        n=cfg.dataset_size,
+        device=cfg.device,
+        good_ratio=good_ratio,
+        zone_half_width=cfg.zone_half_width,
+        reference_sigma=cfg.reference_sigma,
+    )
+    with torch.no_grad():
+        h_w = cfg.beta * (policy.log_prob(y_w) - ref_policy.log_prob(y_w))
+        h_l = cfg.beta * (policy.log_prob(y_l) - ref_policy.log_prob(y_l))
+        loss = -torch.mean(torch.log(torch.sigmoid(h_w - h_l))).item()
+        margin = (policy.log_prob(y_w) - policy.log_prob(y_l)).mean().item()
+        mean_reward = (-(y_w - base_cfg.target).abs()).mean().item()
+    return {
+        "loss": loss,
+        "margin": margin,
+        "mean_reward": mean_reward,
+        "effective_good_mass": _effective_good_mass_dpo(y_w, base_cfg),
+    }
+
+
+def _evaluate_kto_fresh(policy, ref_policy, cfg: MixtureDPOKTOConfig, base_cfg: ExperimentConfig, alpha: float):
+    from src.data_mix import make_mixture_kto_samples
+
+    y, labels = make_mixture_kto_samples(
+        ref_policy,
+        target=cfg.target,
+        zone_half_width=cfg.zone_half_width,
+        n=cfg.dataset_size,
+        device=cfg.device,
+        delta=cfg.delta,
+        good_ratio=alpha,
+    )
+    with torch.no_grad():
+        h = cfg.beta * (policy.log_prob(y) - ref_policy.log_prob(y))
+        if cfg.kl_mode == "batch":
+            kl = policy.kl_to_ref(ref_policy, n_samples=cfg.dataset_size)
+        elif cfg.kl_mode == "running":
+            kl = policy.kl_to_ref(ref_policy, n_samples=cfg.dataset_size)
+        else:
+            kl = torch.tensor(cfg.kl_fixed, device=cfg.device)
+        z = h - kl
+        v = torch.zeros_like(z)
+        v[labels == 1.0] = torch.sigmoid(z[labels == 1.0])
+        v[labels == 0.0] = torch.sigmoid(-cfg.kto_gamma * z[labels == 0.0])
+        loss = torch.mean(1 - v).item()
+        mean_reward = (-(y - base_cfg.target).abs()).mean().item()
+    return {
+        "loss": loss,
+        "mean_reward": mean_reward,
+        "effective_good_mass": labels.float().mean().item(),
+    }
+
+
 def plot_entropy(dpo_results, kto_results, out_path):
     fig, axes = plt.subplots(1, 2, figsize=(11, 4), sharey=True)
     for good_ratio, payload in dpo_results.items():
@@ -189,6 +248,51 @@ def plot_density_grid(dpo_results, kto_results, cfg: MixtureDPOKTOConfig, base_c
     plt.close(fig)
 
 
+def plot_generalization_summary(dpo_results, kto_results, out_path):
+    phases = ["train", "eval", "fresh"]
+    fig, axes = plt.subplots(2, 2, figsize=(12, 8))
+
+    for good_ratio, payload in dpo_results.items():
+        axes[0, 0].plot(
+            phases,
+            [payload["history"]["loss"][-1], payload["history"]["eval_loss"][-1], payload["fresh_test"]["loss"]],
+            marker="o",
+            label=f"good_ratio={good_ratio:.1f}",
+        )
+        axes[1, 0].plot(
+            ["train", "fresh"],
+            [payload["effective_good_mass"], payload["fresh_test"]["effective_good_mass"]],
+            marker="o",
+            label=f"good_ratio={good_ratio:.1f}",
+        )
+
+    for alpha, payload in kto_results.items():
+        axes[0, 1].plot(
+            phases,
+            [payload["history"]["loss"][-1], payload["history"]["eval_loss"][-1], payload["fresh_test"]["loss"]],
+            marker="o",
+            label=f"alpha={alpha:.1f}",
+        )
+        axes[1, 1].plot(
+            ["train", "fresh"],
+            [payload["effective_good_mass"], payload["fresh_test"]["effective_good_mass"]],
+            marker="o",
+            label=f"alpha={alpha:.1f}",
+        )
+
+    axes[0, 0].set_title("Mixture DPO Loss: Train vs Eval vs Fresh")
+    axes[0, 1].set_title("Mixture KTO Loss: Train vs Eval vs Fresh")
+    axes[1, 0].set_title("Mixture DPO Effective Good Mass")
+    axes[1, 1].set_title("Mixture KTO Effective Good Mass")
+    for ax in axes.flatten():
+        ax.grid(True, alpha=0.3)
+        ax.legend()
+
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=200)
+    plt.close(fig)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Compare DPO good_ratio settings and KTO alpha settings for mixtures.")
     parser.add_argument("--dpo-good-ratios", type=str, default="0.1,1.0")
@@ -242,14 +346,23 @@ def main():
     entropy_path = os.path.join(figures_dir, "imbalance_entropy_mix.png")
     density_path = os.path.join(figures_dir, "imbalance_density_grid_mix.png")
     params_path = os.path.join(figures_dir, "imbalance_parameter_dynamics_mix.png")
+    generalization_path = os.path.join(figures_dir, "imbalance_generalization_mix.png")
+
+    for good_ratio, payload in dpo_results.items():
+        payload["fresh_test"] = _evaluate_dpo_fresh(payload["policy"], ref_policy, cfg, base_cfg, good_ratio)
+
+    for alpha, payload in kto_results.items():
+        payload["fresh_test"] = _evaluate_kto_fresh(payload["policy"], ref_policy, cfg, base_cfg, alpha)
 
     plot_entropy(dpo_results, kto_results, entropy_path)
     plot_density_grid(dpo_results, kto_results, cfg, base_cfg, ref_policy, density_path)
     plot_parameter_dynamics(dpo_results, kto_results, params_path)
+    plot_generalization_summary(dpo_results, kto_results, generalization_path)
 
     export_report_figure(entropy_path, "mix_imbalance_entropy.png")
     export_report_figure(density_path, "mix_imbalance_density.png")
     export_report_figure(params_path, "mix_imbalance_params.png")
+    export_report_figure(generalization_path, "mix_imbalance_generalization.png")
 
     save_json(os.path.join(output_root, "config.json"), cfg.__dict__)
     save_json(
@@ -262,6 +375,7 @@ def main():
                     "final_logits": payload["history"]["logits"][-1],
                     "splits": payload["splits"],
                     "effective_good_mass": payload["effective_good_mass"],
+                    "fresh_test": payload["fresh_test"],
                 }
                 for good_ratio, payload in dpo_results.items()
             },
@@ -272,6 +386,7 @@ def main():
                     "final_logits": payload["history"]["logits"][-1],
                     "splits": payload["splits"],
                     "effective_good_mass": payload["effective_good_mass"],
+                    "fresh_test": payload["fresh_test"],
                 }
                 for alpha, payload in kto_results.items()
             },

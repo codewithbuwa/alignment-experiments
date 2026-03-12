@@ -37,6 +37,15 @@ Default split policy:
 - DPO and KTO datasets are split into train/eval by default using `eval_fraction = 0.2`.
 - Training uses the train split only.
 - Held-out inference/evaluation loss is recorded in histories as `eval_loss`.
+- Default split sizes with `dataset_size = 1000`:
+  - train: `800`
+  - eval: `200`
+- The main density, reward, entropy, and parameter plots are model-visualization plots:
+  - either recorded from training history
+  - or evaluated on a dense `y` grid after training
+- The explicit held-out checks are:
+  - `eval_loss` on the internal `20%` split
+  - `fresh_test` metrics on a newly generated unseen dataset from the same generator
 
 Deprecated folders:
 - `experiments_single/`
@@ -80,6 +89,16 @@ Full end-to-end run:
 bash run_all_experiments.sh
 ```
 
+Fresh unseen-data comparison report:
+
+```bash
+python3 experiments/dpo_kto_1d/imbalance_compare.py
+python3 experiments/dpo_kto_mixture_1d/imbalance_compare_mix.py
+```
+
+Written report:
+- `report/unseen_data_evaluation.md`
+
 ## Command Blocks
 
 Single-Gaussian core runs:
@@ -117,6 +136,13 @@ python3 experiments/dpo_kto_mixture_1d/ref_sampling_mix.py
 python3 experiments/dpo_kto_mixture_1d/reward_plot_mix.py
 python3 experiments/dpo_kto_mixture_1d/init_sensitivity_mix.py
 python3 experiments/dpo_kto_mixture_1d/component_evolution_mix.py
+```
+
+Fresh unseen-data evaluation runs:
+
+```bash
+python3 experiments/dpo_kto_1d/imbalance_compare.py
+python3 experiments/dpo_kto_mixture_1d/imbalance_compare_mix.py
 ```
 
 Cross-family and auxiliary runs:
@@ -231,6 +257,12 @@ python3 experiments/dpo_kto_1d/imbalance_compare.py
 Question answered:
 - How do entropy, final distributions, and parameter dynamics differ between `10%` and `50%` supervision?
 - Are DPO and KTO reacting differently under the same imbalance level?
+- Do the same conclusions persist on fresh unseen data sampled after training?
+
+Fresh-test outputs from this script:
+- `train`, `eval`, and `fresh` loss comparison
+- `effective_good_mass` on training data and fresh unseen data
+- `runs/imbalance_summary.json` with `fresh_test` metrics
 
 12. Beta sweep
 
@@ -281,6 +313,10 @@ python3 experiments/dpo_kto_mixture_1d/density_overlay_mix.py
 ```bash
 python3 experiments/dpo_kto_mixture_1d/imbalance_compare_mix.py
 ```
+
+Question answered:
+- How do mixture entropy, per-component parameters, and final densities change across DPO `good_ratio` and KTO `alpha`?
+- Do those mixture conclusions persist on fresh unseen data?
 
 Question answered:
 - How do mixture entropy, final densities, and component parameters differ between `10%` and `50%` imbalance?

@@ -122,6 +122,27 @@ We reproduce and extend the experiments described in \textit{Alignment\_first\_s
     \caption{Per-component sigma dynamics for mixture DPO vs KTO.}
 \end{figure}
 
+\section{Unseen-Data Generalization Checks}
+In addition to the internal `80/20` train/eval split used during optimization, the comparison scripts now generate a fresh unseen dataset after training from the same data-generation process. This separates three questions:
+\begin{itemize}
+    \item training fit on the train split,
+    \item held-out fit on the internal eval split,
+    \item generalization to newly sampled data from the same generator.
+\end{itemize}
+For DPO, fresh-test metrics include loss, winner margin, mean oracle reward of winners, and effective desirable-zone mass. For KTO, fresh-test metrics include loss, mean oracle reward, and effective desirable-zone mass.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{figures/single_imbalance_generalization.png}
+    \caption{Single-Gaussian imbalance comparison: train vs eval vs fresh unseen loss, plus effective-good-mass.}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{figures/mix_imbalance_generalization.png}
+    \caption{Mixture imbalance comparison: train vs eval vs fresh unseen loss, plus effective-good-mass.}
+\end{figure}
+
 \section{Mixture Initialization Sensitivity and Weight Selection}
 \begin{figure}[H]
     \centering

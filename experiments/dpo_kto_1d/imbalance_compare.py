@@ -15,6 +15,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".
 from src.config import ExperimentConfig
 from src.data import make_dpo_pairs, make_kto_samples
 from src.distributions import gaussian_pdf
+from src.losses import dpo_loss, kto_loss
 from src.train import train_dpo, train_kto
 from src.utils import ensure_dir, export_report_figure, get_timestamp, save_json, set_seed, update_latest_paths
 
@@ -33,23 +34,44 @@ def _effective_good_mass_kto(labels: torch.Tensor) -> float:
     return labels.float().mean().item()
 
 
-def _param_box(ax, dpo_out, kto_out):
-    text = "\n".join(
-        [
-            f"DPO: mu={dpo_out['policy'].mu.item():.2f}, sigma={dpo_out['policy'].sigma.item():.2f}",
-            f"KTO: mu={kto_out['policy'].mu.item():.2f}, sigma={kto_out['policy'].sigma.item():.2f}",
-        ]
-    )
-    ax.text(
-        0.02,
-        0.98,
-        text,
-        transform=ax.transAxes,
-        va="top",
-        ha="left",
-        fontsize=8,
-        bbox={"boxstyle": "round,pad=0.3", "facecolor": "white", "alpha": 0.85, "edgecolor": "0.7"},
-    )
+def _evaluate_dpo_fresh(policy, y_w: torch.Tensor, y_l: torch.Tensor, cfg: ExperimentConfig):
+    with torch.no_grad():
+        loss = dpo_loss(y_w, y_l, policy.mu, policy.rho, cfg.mu_ref, cfg.sigma_ref, cfg.beta).item()
+        margin = (policy.log_prob(y_w) - policy.log_prob(y_l)).mean().item()
+        mean_reward = (-(y_w - cfg.target).abs()).mean().item()
+    return {
+        "loss": loss,
+        "margin": margin,
+        "mean_reward": mean_reward,
+        "effective_good_mass": _effective_good_mass_dpo(y_w, cfg),
+    }
+
+
+def _evaluate_kto_fresh(policy, y: torch.Tensor, labels: torch.Tensor, cfg: ExperimentConfig):
+    with torch.no_grad():
+        if cfg.kl_mode == "batch":
+            logp = -0.5 * (((y - policy.mu) / policy.sigma) ** 2 + 2 * torch.log(policy.sigma) + torch.log(torch.tensor(2 * torch.pi)))
+            logp_ref = -0.5 * (((y - y.new_tensor(cfg.mu_ref)) / y.new_tensor(cfg.sigma_ref)) ** 2 + 2 * torch.log(y.new_tensor(cfg.sigma_ref)) + torch.log(torch.tensor(2 * torch.pi)))
+            kl_value = torch.mean(logp - logp_ref)
+        else:
+            kl_value = policy.kl_to_ref(cfg.mu_ref, cfg.sigma_ref)
+        loss = kto_loss(
+            y,
+            labels,
+            policy.mu,
+            policy.rho,
+            cfg.mu_ref,
+            cfg.sigma_ref,
+            cfg.kto_gamma,
+            kl_value,
+            cfg.beta,
+        ).item()
+        mean_reward = (-(y - cfg.target).abs()).mean().item()
+    return {
+        "loss": loss,
+        "mean_reward": mean_reward,
+        "effective_good_mass": _effective_good_mass_kto(labels),
+    }
 
 
 def plot_entropy(dpo_results, kto_results, out_path):
@@ -183,6 +205,51 @@ def plot_density_grid(dpo_results, kto_results, cfg: ExperimentConfig, out_path)
     plt.close(fig)
 
 
+def plot_generalization_summary(dpo_results, kto_results, out_path):
+    phases = ["train", "eval", "fresh"]
+    fig, axes = plt.subplots(2, 2, figsize=(12, 8))
+
+    for good_ratio, payload in dpo_results.items():
+        axes[0, 0].plot(
+            phases,
+            [payload["history"]["loss"][-1], payload["history"]["eval_loss"][-1], payload["fresh_test"]["loss"]],
+            marker="o",
+            label=f"good_ratio={good_ratio:.1f}",
+        )
+        axes[1, 0].plot(
+            ["train", "fresh"],
+            [payload["effective_good_mass"], payload["fresh_test"]["effective_good_mass"]],
+            marker="o",
+            label=f"good_ratio={good_ratio:.1f}",
+        )
+
+    for alpha, payload in kto_results.items():
+        axes[0, 1].plot(
+            phases,
+            [payload["history"]["loss"][-1], payload["history"]["eval_loss"][-1], payload["fresh_test"]["loss"]],
+            marker="o",
+            label=f"alpha={alpha:.1f}",
+        )
+        axes[1, 1].plot(
+            ["train", "fresh"],
+            [payload["effective_good_mass"], payload["fresh_test"]["effective_good_mass"]],
+            marker="o",
+            label=f"alpha={alpha:.1f}",
+        )
+
+    axes[0, 0].set_title("DPO Loss: Train vs Eval vs Fresh")
+    axes[0, 1].set_title("KTO Loss: Train vs Eval vs Fresh")
+    axes[1, 0].set_title("DPO Effective Good Mass")
+    axes[1, 1].set_title("KTO Effective Good Mass")
+    for ax in axes.flatten():
+        ax.grid(True, alpha=0.3)
+        ax.legend()
+
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=200)
+    plt.close(fig)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Compare DPO good_ratio settings and KTO alpha settings for single Gaussians.")
     parser.add_argument("--dpo-good-ratios", type=str, default="0.1,1.0")
@@ -243,14 +310,43 @@ def main():
     entropy_path = os.path.join(figures_dir, "imbalance_entropy.png")
     density_path = os.path.join(figures_dir, "imbalance_density_grid.png")
     params_path = os.path.join(figures_dir, "imbalance_parameter_dynamics.png")
+    generalization_path = os.path.join(figures_dir, "imbalance_generalization.png")
+
+    for good_ratio, payload in dpo_results.items():
+        y_w_fresh, y_l_fresh = make_dpo_pairs(
+            cfg.mu_ref,
+            cfg.sigma_ref,
+            cfg.target,
+            cfg.dataset_size,
+            cfg.device,
+            good_ratio=good_ratio,
+            zone_half_width=cfg.zone_half_width,
+        )
+        payload["fresh_test"] = _evaluate_dpo_fresh(payload["policy"], y_w_fresh, y_l_fresh, cfg)
+
+    for alpha, payload in kto_results.items():
+        y_fresh, labels_fresh = make_kto_samples(
+            cfg.mu_ref,
+            cfg.sigma_ref,
+            cfg.target,
+            cfg.zone_half_width,
+            cfg.dataset_size,
+            cfg.kto_good_fraction,
+            cfg.device,
+            delta=args.delta,
+            good_ratio=alpha,
+        )
+        payload["fresh_test"] = _evaluate_kto_fresh(payload["policy"], y_fresh, labels_fresh, cfg)
 
     plot_entropy(dpo_results, kto_results, entropy_path)
     plot_density_grid(dpo_results, kto_results, cfg, density_path)
     plot_parameter_dynamics(dpo_results, kto_results, params_path)
+    plot_generalization_summary(dpo_results, kto_results, generalization_path)
 
     export_report_figure(entropy_path, "single_imbalance_entropy.png")
     export_report_figure(density_path, "single_imbalance_density.png")
     export_report_figure(params_path, "single_imbalance_params.png")
+    export_report_figure(generalization_path, "single_imbalance_generalization.png")
 
     save_json(os.path.join(output_root, "config.json"), cfg.__dict__)
     save_json(
@@ -262,6 +358,7 @@ def main():
                     "final_sigma": payload["policy"].sigma.item(),
                     "splits": payload["splits"],
                     "effective_good_mass": payload["effective_good_mass"],
+                    "fresh_test": payload["fresh_test"],
                 }
                 for good_ratio, payload in dpo_results.items()
             },
@@ -271,6 +368,7 @@ def main():
                     "final_sigma": payload["policy"].sigma.item(),
                     "splits": payload["splits"],
                     "effective_good_mass": payload["effective_good_mass"],
+                    "fresh_test": payload["fresh_test"],
                 }
                 for alpha, payload in kto_results.items()
             },
