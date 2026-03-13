@@ -118,7 +118,7 @@ def main():
     )
     export_report_figure(
         os.path.join(figures_dir, "entropy_sensitivity.png"),
-        "single_entropy_sensitivity.png",
+        "single_sigma_sensitivity.png",
     )
 
     # Zone sweep

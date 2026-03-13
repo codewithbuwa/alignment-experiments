@@ -22,7 +22,7 @@ class ExperimentConfig:
     zone_half_width: float = 1.5
 
     # Dataset and optimization
-    dataset_size: int = 1000
+    dataset_size: int = 10000
     batch_size: int = 128
     steps: int = 2000
     lr: float = 1e-3

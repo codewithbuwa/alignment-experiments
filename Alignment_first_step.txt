@@ -1,0 +1,142 @@
+                  Experiment Design: The Search for 7
+
+                 Greedy Maximization (DPO) vs. Boundary Satisfaction (KTO)
+
+                                      Kera - Machine Intelligence Unit
+
+                                               February 21, 2026
+
+1 Goal
+
+The objective of this experiment is to empirically compare the behavior of Direct Preference
+Optimization (DPO) and Kahneman-Tversky Optimization (KTO) in a continuous 1D
+scalar world. We aim to demonstrate that DPO acts as a high-precision ranker that seeks to
+maximize reward by collapsing the distribution onto the single best point (Greedy Maximization),
+whereas KTO acts as a utility-based classifier that seeks to move the distribution into a "safe zone"
+while preserving entropy (Satisficing).
+
+2 Experimental Setup
+
+2.1 Environment and Policy
+
+The action space is the real number line R. The policy (y) is a Gaussian distribution N (µ, 2).
+The parameters to be optimized are  = {µ, }, where  = exp() to ensure positivity.
+
+    · Reference Policy (ref ): N (µ = 5, 2 = 22).
+    · Oracle Reward: R(y) = -|y - 7|. The ideal value is y = 7.
+
+2.2 Data Generation
+
+Two distinct datasets are generated from the reference policy:
+   1. DPO Dataset (SDP O): Sample pairs (y1, y2)  ref . Define yw (winner) as the sample
+       closer to 7 and yl (loser) as the other.
+   2. KTO Dataset (SKT O): Sample single points y  ref . Define a desirable zone Z = [5.5, 8.5].
+       Label y as Desirable (G) if y  Z, and Undesirable (B) otherwise.
+
+  Remark: KTO Plateau Behavior
+  KTO will plateau (mesa) across the desirable zone not as algorithmic intuition but because all
+  y  [5.5, 8.5] are labeled equally desirable. KTO has no gradient incentive to prefer y = 7.0 over
+  y = 6.2 once both are classified as good. To strengthen the boundary-seeking interpretation,
+  consider varying the zone width Z = [7 - , 7 + ] and plotting the final  as a function of . If
+  KTO truly behaves as a boundary seeker,  should scale with .
+
+                                                                1
+2.3 The Sensitivity Test
+
+Run KTO twice:
+    · With a balanced dataset (50% Good, 50% Bad).
+    · With an imbalanced dataset (10% Good, 90% Bad).
+
+Expectation: KTO should remain stable in the imbalanced case, whereas DPO (if similarly imbal-
+anced by removing high-reward pairs) might struggle.
+
+3 Methodology
+
+3.1 Loss Functions
+
+Let  h (y )  =   log    (y)    represent  the  implicit  reward.
+                      ref (y)
+
+DPO Loss:
+
+                      LDP O() = -E(yw,yl)SDP O [log  (h(yw) - h(yl))]
+
+KTO Loss: Define the utility v(y, L) using Prospect Theory:
+
+                                    LKT O() = E(y,L)SKT O [w(L)(1 - v(y, L))]
+
+Where z(y) = h(y) - ref KL, and:
+    · If L = G: v = (z(y))
+    · If L = B: v = (-z(y)) with  = 1.33 (loss aversion). Notice how KTO treats "Bad"
+       samples more aggressively than "Good" ones.
+
+Remark: ref KL Definition Clarification
+
+The term ref KL in z(y) = h(y) - ref KL acts as a decision boundary shift and must be
+operationally specified. Ambiguous choices include: a batch-estimated KL, a running-average
+KL or a fixed scalar. For Gaussian policies, the KL divergence has a closed form. If used, it
+should be stated explicitly, along with whether the KL is recomputed each iteration and whether
+gradients flow through it. Implementations will diverge otherwise.
+
+3.2 Optimization Details
+
+To ensure reproducibility and valid comparison, all hyperparameters are fixed across DPO and
+KTO:
+
+  Remark: Controlled Hyperparameters
+
+  For the entropy dynamics comparison to be meaningful, , the optimizer, learning rate, batch
+  size, and number of training steps must be identical across both methods.
+
+                                                         2
+              Hyperparameter Value
+
+                                               [to be specified; ]
+               (KTO loss aversion)             1.33
+              Optimizer                        [Adam]
+              Learning rate                    [1 × 10-3]
+              Number of steps                  [2000]
+              Dataset size                     [N = 1000 pairs / points]
+
+                         Table 1: Optimization hyperparameters.
+
+4 Expected Results and Visualization
+
+The experiment should conclude with a three-panel figure:
+
+1. Panel 1 (Density Projection): Plot the PDF of ref , DP O, and KT O.
+
+       · Expectation: DP O will be a narrow spike at y = 7. KT O will be a wider Gaussian
+          covering the interval [5.5, 8.5].
+
+2.  Panel  2  (Implicit  Reward):  Plot  r(y)  =    log    (y)    .
+                                                         ref (y)
+
+3. Expectation: DPO creates a quadratic slope peaking at 7. KTO creates a plateau (mesa)
+   across the desirable zone.
+
+4. Panel 3 (Entropy Dynamics): Plot  vs. training iterations.
+
+    · Expectation: DPO will show continuous "entropy collapse" as   0. KTO will show 
+       stabilizing once the distribution is safely within the desirable boundaries.
+
+Remark: Entropy
+
+For moderate , the result is a softened distribution shifted toward y = 7.
+Recommended addition: Run a  sweep (small / medium / large) and plot final  vs. . This
+turns a narrative prediction into an empirical result and directly tests the greedy maximization.
+What can we conclude here?
+
+5 Comparison Summary
+
+    Feature              DPO Prediction KTO Prediction
+
+    Optimization Mode    Greedy Maximization        Satisficing (Boundary seeking)
+    Final Distribution   Narrow Spike ( )           Wide Bell Curve (  Zone Width)
+    Implicit Reward      Continuous Gradient        Binary-like Plateau
+    Key Driver           Ranking Margin             Loss Aversion ()
+
+              Table 2: Theoretic expectations of model behavior after convergence.
+
+                                               3
+

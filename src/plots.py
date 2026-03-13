@@ -53,11 +53,11 @@ def plot_main_panels(
     axes[1].set_ylabel("h(y)")
     axes[1].legend()
 
-    axes[2].plot(dpo_history["entropy"], label="dpo", linewidth=2)
-    axes[2].plot(kto_history["entropy"], label="kto", linewidth=2)
-    axes[2].set_title("Entropy Dynamics")
+    axes[2].plot(dpo_history["sigma"], label="dpo", linewidth=2)
+    axes[2].plot(kto_history["sigma"], label="kto", linewidth=2)
+    axes[2].set_title("Sigma Dynamics")
     axes[2].set_xlabel("step")
-    axes[2].set_ylabel("entropy")
+    axes[2].set_ylabel("sigma")
     axes[2].legend()
 
     fig.tight_layout()
@@ -68,12 +68,12 @@ def plot_main_panels(
 
 def plot_entropy_comparison(output_path: str, dpo_history, kto_bal_history, kto_imb_history):
     fig, ax = plt.subplots(1, 1, figsize=(6, 4))
-    ax.plot(dpo_history["entropy"], label="dpo", linewidth=2)
-    ax.plot(kto_bal_history["entropy"], label="kto_bal", linewidth=2)
-    ax.plot(kto_imb_history["entropy"], label="kto_imb", linewidth=2)
-    ax.set_title("Entropy Dynamics (Sensitivity)")
+    ax.plot(dpo_history["sigma"], label="dpo", linewidth=2)
+    ax.plot(kto_bal_history["sigma"], label="kto_bal", linewidth=2)
+    ax.plot(kto_imb_history["sigma"], label="kto_imb", linewidth=2)
+    ax.set_title("Sigma Dynamics (Sensitivity)")
     ax.set_xlabel("step")
-    ax.set_ylabel("entropy")
+    ax.set_ylabel("sigma")
     ax.legend()
 
     fig.tight_layout()
@@ -84,11 +84,11 @@ def plot_entropy_comparison(output_path: str, dpo_history, kto_bal_history, kto_
 
 def plot_kto_sensitivity(output_path: str, kto_bal_history, kto_imb_history):
     fig, ax = plt.subplots(1, 1, figsize=(6, 4))
-    ax.plot(kto_bal_history["entropy"], label="kto_bal", linewidth=2)
-    ax.plot(kto_imb_history["entropy"], label="kto_imb", linewidth=2)
-    ax.set_title("KTO Entropy Dynamics (Sensitivity)")
+    ax.plot(kto_bal_history["sigma"], label="kto_bal", linewidth=2)
+    ax.plot(kto_imb_history["sigma"], label="kto_imb", linewidth=2)
+    ax.set_title("KTO Sigma Dynamics (Sensitivity)")
     ax.set_xlabel("step")
-    ax.set_ylabel("entropy")
+    ax.set_ylabel("sigma")
     ax.legend()
 
     fig.tight_layout()

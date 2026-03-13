@@ -40,12 +40,13 @@ Default split policy:
 - Default split sizes with `dataset_size = 1000`:
   - train: `800`
   - eval: `200`
-- The main density, reward, entropy, and parameter plots are model-visualization plots:
+- The main density, reward, sigma, and parameter plots are model-visualization plots for the single-Gaussian setup:
   - either recorded from training history
   - or evaluated on a dense `y` grid after training
+- Mixture experiments additionally use entropy where overall spread is not determined by sigma alone.
 - The explicit held-out checks are:
   - `eval_loss` on the internal `20%` split
-  - `fresh_test` metrics on a newly generated unseen dataset from the same generator
+  - shared post-training evaluation on newly sampled policy outputs
 
 Deprecated folders:
 - `experiments_single/`
@@ -89,7 +90,7 @@ Full end-to-end run:
 bash run_all_experiments.sh
 ```
 
-Fresh unseen-data comparison report:
+Shared post-training evaluation:
 
 ```bash
 python3 experiments/dpo_kto_1d/imbalance_compare.py
@@ -138,7 +139,7 @@ python3 experiments/dpo_kto_mixture_1d/init_sensitivity_mix.py
 python3 experiments/dpo_kto_mixture_1d/component_evolution_mix.py
 ```
 
-Fresh unseen-data evaluation runs:
+Shared evaluation runs:
 
 ```bash
 python3 experiments/dpo_kto_1d/imbalance_compare.py
@@ -158,7 +159,7 @@ cat results/_latest_paths.txt
 
 ### Part 1: Core Single-Gaussian Story
 
-1. Main three-panel result: density, implicit reward, entropy
+1. Main three-panel result: density, implicit reward, sigma
 
 ```bash
 python3 experiments/dpo_kto_1d/run_all.py
@@ -196,7 +197,7 @@ python3 experiments/dpo_kto_1d/run_entropy_dynamics.py
 ```
 
 Question answered:
-- Does DPO collapse entropy while KTO stabilizes?
+- Does DPO collapse sigma while KTO stabilizes?
 
 ### Part 2: KTO-Specific Checks
 
@@ -255,14 +256,14 @@ python3 experiments/dpo_kto_1d/imbalance_compare.py
 ```
 
 Question answered:
-- How do entropy, final distributions, and parameter dynamics differ between `10%` and `50%` supervision?
+- How do sigma, final distributions, and parameter dynamics differ between `10%` and `50%` supervision?
 - Are DPO and KTO reacting differently under the same imbalance level?
-- Do the same conclusions persist on fresh unseen data sampled after training?
+- Do the same conclusions persist under a shared post-training evaluation based on policy samples?
 
-Fresh-test outputs from this script:
-- `train`, `eval`, and `fresh` loss comparison
-- `effective_good_mass` on training data and fresh unseen data
-- `runs/imbalance_summary.json` with `fresh_test` metrics
+Shared-evaluation outputs from this script:
+- mean oracle reward on policy samples
+- sigma summary
+- `runs/imbalance_summary.json` with `shared_eval` metrics
 
 12. Beta sweep
 
@@ -315,11 +316,11 @@ python3 experiments/dpo_kto_mixture_1d/imbalance_compare_mix.py
 ```
 
 Question answered:
-- How do mixture entropy, per-component parameters, and final densities change across DPO `good_ratio` and KTO `alpha`?
-- Do those mixture conclusions persist on fresh unseen data?
+- How do mixture per-component parameters and final densities change across DPO `good_ratio` and KTO `alpha`?
+- Do those mixture conclusions persist under a shared post-training evaluation based on policy samples?
 
 Question answered:
-- How do mixture entropy, final densities, and component parameters differ between `10%` and `50%` imbalance?
+- How do mixture final densities and component parameters differ between `10%` and `50%` imbalance?
 - Which components absorb the imbalance under DPO versus KTO?
 
 18. Mixture entropy dynamics per component

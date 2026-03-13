@@ -91,7 +91,7 @@ def main():
     for mode, s in zip(modes, sigmas):
         plt.plot(s, label=mode)
     plt.legend()
-    plt.title("Reference Sampling Entropy Dynamics")
+    plt.title("Reference Sampling Sigma Dynamics")
     plt.xlabel("step")
     plt.ylabel("sigma")
     plt.savefig(os.path.join(figures_dir, "reference_sampling_entropy_dynamics.png"))

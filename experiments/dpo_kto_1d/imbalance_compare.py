@@ -15,7 +15,6 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".
 from src.config import ExperimentConfig
 from src.data import make_dpo_pairs, make_kto_samples
 from src.distributions import gaussian_pdf
-from src.losses import dpo_loss, kto_loss
 from src.train import train_dpo, train_kto
 from src.utils import ensure_dir, export_report_figure, get_timestamp, save_json, set_seed, update_latest_paths
 
@@ -24,63 +23,27 @@ def parse_ratio_list(csv_text: str):
     return [float(x.strip()) for x in csv_text.split(",") if x.strip()]
 
 
-def _effective_good_mass_dpo(y_w: torch.Tensor, cfg: ExperimentConfig) -> float:
-    zone_min = cfg.target - cfg.zone_half_width
-    zone_max = cfg.target + cfg.zone_half_width
-    return ((y_w >= zone_min) & (y_w <= zone_max)).float().mean().item()
-
-
-def _effective_good_mass_kto(labels: torch.Tensor) -> float:
-    return labels.float().mean().item()
-
-
-def _evaluate_dpo_fresh(policy, y_w: torch.Tensor, y_l: torch.Tensor, cfg: ExperimentConfig):
+def _shared_policy_eval(policy, cfg: ExperimentConfig, n_samples: int):
     with torch.no_grad():
-        loss = dpo_loss(y_w, y_l, policy.mu, policy.rho, cfg.mu_ref, cfg.sigma_ref, cfg.beta).item()
-        margin = (policy.log_prob(y_w) - policy.log_prob(y_l)).mean().item()
-        mean_reward = (-(y_w - cfg.target).abs()).mean().item()
+        y = policy.sample(n_samples)
+        zone_min = cfg.target - cfg.zone_half_width
+        zone_max = cfg.target + cfg.zone_half_width
+        reward = -(y - cfg.target).abs()
     return {
-        "loss": loss,
-        "margin": margin,
-        "mean_reward": mean_reward,
-        "effective_good_mass": _effective_good_mass_dpo(y_w, cfg),
-    }
-
-
-def _evaluate_kto_fresh(policy, y: torch.Tensor, labels: torch.Tensor, cfg: ExperimentConfig):
-    with torch.no_grad():
-        if cfg.kl_mode == "batch":
-            logp = -0.5 * (((y - policy.mu) / policy.sigma) ** 2 + 2 * torch.log(policy.sigma) + torch.log(torch.tensor(2 * torch.pi)))
-            logp_ref = -0.5 * (((y - y.new_tensor(cfg.mu_ref)) / y.new_tensor(cfg.sigma_ref)) ** 2 + 2 * torch.log(y.new_tensor(cfg.sigma_ref)) + torch.log(torch.tensor(2 * torch.pi)))
-            kl_value = torch.mean(logp - logp_ref)
-        else:
-            kl_value = policy.kl_to_ref(cfg.mu_ref, cfg.sigma_ref)
-        loss = kto_loss(
-            y,
-            labels,
-            policy.mu,
-            policy.rho,
-            cfg.mu_ref,
-            cfg.sigma_ref,
-            cfg.kto_gamma,
-            kl_value,
-            cfg.beta,
-        ).item()
-        mean_reward = (-(y - cfg.target).abs()).mean().item()
-    return {
-        "loss": loss,
-        "mean_reward": mean_reward,
-        "effective_good_mass": _effective_good_mass_kto(labels),
+        "mean_reward": reward.mean().item(),
+        "reward_std": reward.std(unbiased=False).item(),
+        "zone_occupancy": ((y >= zone_min) & (y <= zone_max)).float().mean().item(),
+        "sigma_summary": policy.sigma.item(),
     }
 
 
 def plot_entropy(dpo_results, kto_results, out_path):
     fig, axes = plt.subplots(1, 2, figsize=(11, 4), sharey=True)
     for good_ratio, payload in dpo_results.items():
-        label = f"good_ratio={good_ratio:.1f}, eff={payload['effective_good_mass']:.2f}"
+        label = f"good_ratio={good_ratio:.1f}"
         axes[0].plot(payload["history"]["entropy"], label=label)
     for alpha, payload in kto_results.items():
-        label = f"alpha={alpha:.1f}, eff={payload['effective_good_mass']:.2f}"
+        label = f"alpha={alpha:.1f}"
         axes[1].plot(payload["history"]["entropy"], label=label)
 
     axes[0].set_title("DPO Entropy")
@@ -99,11 +62,11 @@ def plot_entropy(dpo_results, kto_results, out_path):
 def plot_parameter_dynamics(dpo_results, kto_results, out_path):
     fig, axes = plt.subplots(2, 2, figsize=(12, 8), sharex=True)
     for good_ratio, payload in dpo_results.items():
-        label = f"good_ratio={good_ratio:.1f}, eff={payload['effective_good_mass']:.2f}"
+        label = f"good_ratio={good_ratio:.1f}"
         axes[0, 0].plot(payload["history"]["mu"], label=label)
         axes[1, 0].plot(payload["history"]["sigma"], label=label)
     for alpha, payload in kto_results.items():
-        label = f"alpha={alpha:.1f}, eff={payload['effective_good_mass']:.2f}"
+        label = f"alpha={alpha:.1f}"
         axes[0, 1].plot(payload["history"]["mu"], label=label)
         axes[1, 1].plot(payload["history"]["sigma"], label=label)
 
@@ -155,8 +118,7 @@ def plot_density_grid(dpo_results, kto_results, cfg: ExperimentConfig, out_path)
                 0.98,
                 (
                     f"mu={payload['policy'].mu.item():.2f}\n"
-                    f"sigma={payload['policy'].sigma.item():.2f}\n"
-                    f"eff={payload['effective_good_mass']:.2f}"
+                    f"sigma={payload['policy'].sigma.item():.2f}"
                 ),
                 transform=dpo_ax.transAxes,
                 va="top",
@@ -181,8 +143,7 @@ def plot_density_grid(dpo_results, kto_results, cfg: ExperimentConfig, out_path)
                 0.98,
                 (
                     f"mu={payload['policy'].mu.item():.2f}\n"
-                    f"sigma={payload['policy'].sigma.item():.2f}\n"
-                    f"eff={payload['effective_good_mass']:.2f}"
+                    f"sigma={payload['policy'].sigma.item():.2f}"
                 ),
                 transform=kto_ax.transAxes,
                 va="top",
@@ -205,45 +166,23 @@ def plot_density_grid(dpo_results, kto_results, cfg: ExperimentConfig, out_path)
     plt.close(fig)
 
 
-def plot_generalization_summary(dpo_results, kto_results, out_path):
-    phases = ["train", "eval", "fresh"]
-    fig, axes = plt.subplots(2, 2, figsize=(12, 8))
-
-    for good_ratio, payload in dpo_results.items():
-        axes[0, 0].plot(
-            phases,
-            [payload["history"]["loss"][-1], payload["history"]["eval_loss"][-1], payload["fresh_test"]["loss"]],
-            marker="o",
-            label=f"good_ratio={good_ratio:.1f}",
-        )
-        axes[1, 0].plot(
-            ["train", "fresh"],
-            [payload["effective_good_mass"], payload["fresh_test"]["effective_good_mass"]],
-            marker="o",
-            label=f"good_ratio={good_ratio:.1f}",
-        )
-
-    for alpha, payload in kto_results.items():
-        axes[0, 1].plot(
-            phases,
-            [payload["history"]["loss"][-1], payload["history"]["eval_loss"][-1], payload["fresh_test"]["loss"]],
-            marker="o",
-            label=f"alpha={alpha:.1f}",
-        )
-        axes[1, 1].plot(
-            ["train", "fresh"],
-            [payload["effective_good_mass"], payload["fresh_test"]["effective_good_mass"]],
-            marker="o",
-            label=f"alpha={alpha:.1f}",
-        )
-
-    axes[0, 0].set_title("DPO Loss: Train vs Eval vs Fresh")
-    axes[0, 1].set_title("KTO Loss: Train vs Eval vs Fresh")
-    axes[1, 0].set_title("DPO Effective Good Mass")
-    axes[1, 1].set_title("KTO Effective Good Mass")
-    for ax in axes.flatten():
-        ax.grid(True, alpha=0.3)
-        ax.legend()
+def plot_shared_evaluation(dpo_results, kto_results, out_path):
+    labels = [f"DPO {good_ratio:.1f}" for good_ratio in sorted(dpo_results.keys())]
+    labels += [f"KTO {alpha:.1f}" for alpha in sorted(kto_results.keys())]
+    metrics = {
+        "Mean Reward": [dpo_results[k]["shared_eval"]["mean_reward"] for k in sorted(dpo_results.keys())]
+        + [kto_results[k]["shared_eval"]["mean_reward"] for k in sorted(kto_results.keys())],
+        "Final Sigma": [dpo_results[k]["shared_eval"]["sigma_summary"] for k in sorted(dpo_results.keys())]
+        + [kto_results[k]["shared_eval"]["sigma_summary"] for k in sorted(kto_results.keys())],
+    }
+    colors = ["tab:blue"] * len(dpo_results) + ["tab:orange"] * len(kto_results)
+    fig, axes = plt.subplots(1, 2, figsize=(10, 4.5))
+    for ax, (title, values) in zip(axes, metrics.items()):
+        ax.bar(range(len(labels)), values, color=colors)
+        ax.set_title(f"Shared Evaluation: {title}")
+        ax.set_xticks(range(len(labels)))
+        ax.set_xticklabels(labels, rotation=20, ha="right")
+        ax.grid(True, alpha=0.3, axis="y")
 
     fig.tight_layout()
     fig.savefig(out_path, dpi=200)
@@ -255,6 +194,7 @@ def main():
     parser.add_argument("--dpo-good-ratios", type=str, default="0.1,1.0")
     parser.add_argument("--kto-alphas", type=str, default="0.1,0.5")
     parser.add_argument("--delta", type=float, default=0.0)
+    parser.add_argument("--eval-samples", type=int, default=5000)
     args = parser.parse_args()
 
     cfg = ExperimentConfig()
@@ -283,7 +223,6 @@ def main():
             "policy": dpo_out["policy"],
             "history": dpo_out["history"],
             "splits": dpo_out["splits"],
-            "effective_good_mass": _effective_good_mass_dpo(y_w, cfg),
         }
 
     kto_results = {}
@@ -304,49 +243,28 @@ def main():
             "policy": kto_out["policy"],
             "history": kto_out["history"],
             "splits": kto_out["splits"],
-            "effective_good_mass": _effective_good_mass_kto(labels),
         }
 
     entropy_path = os.path.join(figures_dir, "imbalance_entropy.png")
     density_path = os.path.join(figures_dir, "imbalance_density_grid.png")
     params_path = os.path.join(figures_dir, "imbalance_parameter_dynamics.png")
-    generalization_path = os.path.join(figures_dir, "imbalance_generalization.png")
+    generalization_path = os.path.join(figures_dir, "imbalance_shared_eval.png")
 
-    for good_ratio, payload in dpo_results.items():
-        y_w_fresh, y_l_fresh = make_dpo_pairs(
-            cfg.mu_ref,
-            cfg.sigma_ref,
-            cfg.target,
-            cfg.dataset_size,
-            cfg.device,
-            good_ratio=good_ratio,
-            zone_half_width=cfg.zone_half_width,
-        )
-        payload["fresh_test"] = _evaluate_dpo_fresh(payload["policy"], y_w_fresh, y_l_fresh, cfg)
+    for payload in dpo_results.values():
+        payload["shared_eval"] = _shared_policy_eval(payload["policy"], cfg, args.eval_samples)
 
-    for alpha, payload in kto_results.items():
-        y_fresh, labels_fresh = make_kto_samples(
-            cfg.mu_ref,
-            cfg.sigma_ref,
-            cfg.target,
-            cfg.zone_half_width,
-            cfg.dataset_size,
-            cfg.kto_good_fraction,
-            cfg.device,
-            delta=args.delta,
-            good_ratio=alpha,
-        )
-        payload["fresh_test"] = _evaluate_kto_fresh(payload["policy"], y_fresh, labels_fresh, cfg)
+    for payload in kto_results.values():
+        payload["shared_eval"] = _shared_policy_eval(payload["policy"], cfg, args.eval_samples)
 
     plot_entropy(dpo_results, kto_results, entropy_path)
     plot_density_grid(dpo_results, kto_results, cfg, density_path)
     plot_parameter_dynamics(dpo_results, kto_results, params_path)
-    plot_generalization_summary(dpo_results, kto_results, generalization_path)
+    plot_shared_evaluation(dpo_results, kto_results, generalization_path)
 
-    export_report_figure(entropy_path, "single_imbalance_entropy.png")
+    export_report_figure(entropy_path, "single_imbalance_sigma.png")
     export_report_figure(density_path, "single_imbalance_density.png")
     export_report_figure(params_path, "single_imbalance_params.png")
-    export_report_figure(generalization_path, "single_imbalance_generalization.png")
+    export_report_figure(generalization_path, "single_imbalance_shared_eval.png")
 
     save_json(os.path.join(output_root, "config.json"), cfg.__dict__)
     save_json(
@@ -357,8 +275,7 @@ def main():
                     "final_mu": payload["policy"].mu.item(),
                     "final_sigma": payload["policy"].sigma.item(),
                     "splits": payload["splits"],
-                    "effective_good_mass": payload["effective_good_mass"],
-                    "fresh_test": payload["fresh_test"],
+                    "shared_eval": payload["shared_eval"],
                 }
                 for good_ratio, payload in dpo_results.items()
             },
@@ -367,8 +284,7 @@ def main():
                     "final_mu": payload["policy"].mu.item(),
                     "final_sigma": payload["policy"].sigma.item(),
                     "splits": payload["splits"],
-                    "effective_good_mass": payload["effective_good_mass"],
-                    "fresh_test": payload["fresh_test"],
+                    "shared_eval": payload["shared_eval"],
                 }
                 for alpha, payload in kto_results.items()
             },

@@ -1,6 +1,6 @@
 """
 Author: Jordan Kevin Buwa Mbouobda
-Purpose: Plot entropy dynamics for single-Gaussian DPO and KTO runs.
+Purpose: Plot sigma dynamics for single-Gaussian DPO and KTO runs.
 """
 
 import os
@@ -33,7 +33,7 @@ def main():
     set_seed(cfg.seed)
 
     timestamp = get_timestamp()
-    output_root = os.path.join("results", "dpo_kto_1d", f"entropy_dynamics_{timestamp}")
+    output_root = os.path.join("results", "dpo_kto_1d", f"sigma_dynamics_{timestamp}")
     figures_dir = os.path.join(output_root, "figures")
     runs_dir = os.path.join(output_root, "runs")
     ensure_dir(figures_dir)
@@ -67,7 +67,7 @@ def main():
 
     plt.xlabel("Training Step")
     plt.ylabel("Sigma")
-    plt.title("Entropy Dynamics")
+    plt.title("Sigma Dynamics")
     plt.legend()
     plt.savefig(os.path.join(figures_dir, "entropy_dynamics.png"))
     plt.close()
@@ -79,7 +79,7 @@ def main():
 
     save_json(os.path.join(output_root, "config.json"), cfg.__dict__)
     save_json(
-        os.path.join(runs_dir, "entropy_quartiles.json"),
+        os.path.join(runs_dir, "sigma_quartiles.json"),
         {
             "quartile_steps": quartiles,
             "dpo_sigmas": [dpo_sigmas[i] for i in quartiles],
@@ -87,9 +87,9 @@ def main():
         },
     )
 
-    update_latest_paths("entropy_dynamics", output_root)
+    update_latest_paths("sigma_dynamics", output_root)
 
-    print(f"Saved entropy dynamics results to: {output_root}")
+    print(f"Saved sigma dynamics results to: {output_root}")
 
 
 if __name__ == "__main__":

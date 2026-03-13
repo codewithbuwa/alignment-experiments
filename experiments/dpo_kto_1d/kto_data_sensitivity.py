@@ -1,6 +1,6 @@
 """
 Author: Jordan Kevin Buwa Mbouobda
-Purpose: Compare balanced and imbalanced KTO entropy dynamics.
+Purpose: Compare balanced and imbalanced KTO sigma dynamics.
 """
 
 import os
